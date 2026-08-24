@@ -1,0 +1,22 @@
+# secrets & personal data (created at runtime by the app)
+.env
+*.env
+*.db
+spaces/
+backups/
+
+# environments and build output
+hulms-agent/.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+hulms-ui/node_modules/
+hulms-ui/.next/
+
+# machine-specific generated files
+hulms-mcp.local.json
+hulms-ui/hulms-mcp.local.json

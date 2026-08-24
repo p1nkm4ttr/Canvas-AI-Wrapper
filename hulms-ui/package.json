@@ -1,0 +1,20 @@
+{
+  "name": "hulms-ui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3117",
+    "build": "next build",
+    "start": "next start -p 3117"
+  },
+  "dependencies": {
+    "katex": "^0.18.4",
+    "next": "^15.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
+  }
+}
