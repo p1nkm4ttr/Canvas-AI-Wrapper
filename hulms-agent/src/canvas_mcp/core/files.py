@@ -31,6 +31,30 @@ async def _download(url: str, timeout: float = 120.0) -> bytes | None:
         return None
 
 
+async def fetch_file_bytes(
+    file_id: int | str, course_id: int | None = None
+) -> tuple[str, bytes] | dict:
+    """Download a Canvas file's raw bytes: (display_name, data) or {"error"}.
+
+    Used by figure extraction, which needs the original document, not the
+    cached text.
+    """
+    meta = await make_canvas_request("get", f"/files/{file_id}")
+    if isinstance(meta, dict) and "error" in meta and course_id is not None:
+        meta = await make_canvas_request("get", f"/courses/{course_id}/files/{file_id}")
+    if isinstance(meta, dict) and "error" in meta:
+        return {"error": f"Could not read file {file_id}: {meta['error']}"}
+    name = meta.get("display_name") or meta.get("filename") or f"file {file_id}"
+    if (meta.get("size") or 0) > MAX_DOWNLOAD_BYTES:
+        return {"error": f"File is too large to download ({(meta.get('size') or 0) / 1e6:.0f} MB)."}
+    if not meta.get("url"):
+        return {"error": f"File {file_id} has no download URL (permissions?)."}
+    data = await _download(meta["url"])
+    if data is None:
+        return {"error": f"Download failed for file {file_id} ('{name}')."}
+    return name, data
+
+
 async def get_file_text_cached(file_id: int | str, course_id: int | None = None) -> dict:
     """Extracted text for one Canvas file, from cache when fresh.
 

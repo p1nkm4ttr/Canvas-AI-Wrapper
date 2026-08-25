@@ -68,6 +68,12 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     ),
     "get_grade_weights": _fenced("fence_untrusted_inline"),
     "get_my_grades": _fenced("fence_untrusted_inline"),
+    "get_document_images": _safe(
+        "Returns filesystem paths, sizes, and counts of extracted figures; no Canvas-authored free text beyond a filename."
+    ),
+    "fetch_web_image": _safe(
+        "Returns the local path of a downloaded image; no Canvas content at all."
+    ),
     "get_peer_reviews": _fenced("fence_untrusted_inline"),
     "get_syllabus": _fenced("fence_untrusted"),
     "get_todo": _fenced("fence_untrusted_inline"),

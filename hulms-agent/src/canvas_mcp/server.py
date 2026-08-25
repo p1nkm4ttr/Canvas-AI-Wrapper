@@ -19,6 +19,7 @@ from .core.logging import log_error, log_info, log_warning
 from .core.tool_results import install_tool_result_contract
 from .tools import (
     register_grade_tools,
+    register_image_tools,
     register_plan_event_tools,
     register_retrieval_tools,
     register_student_write_tools,
@@ -43,6 +44,7 @@ def register_all_tools(mcp: FastMCP) -> None:
     register_plan_event_tools(mcp)
     register_retrieval_tools(mcp)
     register_grade_tools(mcp)
+    register_image_tools(mcp)
     # Extra write tools (submit_assignment etc.) register only when named in
     # STUDENT_WRITE_TOOLS (default: none).
     register_student_write_tools(mcp)
