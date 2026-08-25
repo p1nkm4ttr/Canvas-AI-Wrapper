@@ -225,3 +225,45 @@ def test_render_beyond_document_errors():
     from canvas_mcp.core.images import render_pdf_pages
     from tests.core.test_extract import MINI_PDF
     assert "error" in render_pdf_pages(MINI_PDF, 99, 100)
+
+
+def test_crop_image_file_cuts_the_right_region(tmp_path):
+    from PIL import Image
+
+    from canvas_mcp.core.images import crop_image_file
+    img = Image.new("RGB", (200, 100), (0, 0, 255))
+    for x in range(100, 200):
+        for y in range(50, 100):
+            img.putpixel((x, y), (255, 0, 0))  # bottom-right quadrant red
+    src = tmp_path / "page.png"
+    img.save(src)
+
+    name, blob = crop_image_file(src, 50, 50, 100, 100)
+    out = Image.open(io.BytesIO(blob))
+    assert out.size == (100, 50)
+    assert out.getpixel((10, 10)) == (255, 0, 0)
+    assert "crop-50x50-100x100" in name
+
+
+def test_crop_image_file_rejects_bad_box(tmp_path):
+    from PIL import Image
+
+    from canvas_mcp.core.images import crop_image_file
+    src = tmp_path / "x.png"
+    Image.new("RGB", (10, 10)).save(src)
+    assert isinstance(crop_image_file(src, 60, 0, 40, 100), str)  # left >= right
+    assert isinstance(crop_image_file(src, 0, 0, 100, 101), str)  # out of range
+
+
+async def test_crop_tool_containment(fake_root):
+    result = await get_tool("crop_image")("C:/Windows/win.ini", 0, 0, 50, 50)
+    assert "error" in result
+
+
+async def test_crop_tool_roundtrip(fake_root):
+    from canvas_mcp.core.images import save_figures
+    saved = save_figures("canvas-7-pages", [("render-page001.png", _noisy_png((100, 100)))])
+    result = await get_tool("crop_image")(saved[0]["file"], 0, 0, 50, 50)
+    assert result["embed"].startswith("/api/spacefile?p=.figures/canvas-7-pages/")
+    from pathlib import Path
+    assert Path(result["file"]).exists()

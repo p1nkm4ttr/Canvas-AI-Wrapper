@@ -200,6 +200,56 @@ def register_image_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
     @validate_params
+    async def crop_image(
+        image: str, left: float, top: float, right: float, bottom: float
+    ) -> dict:
+        """Crop a previously extracted/rendered image to just the figure.
+        THE follow-up to render_document_pages: view the full page first,
+        estimate the figure's box as PERCENTAGES from the top-left, crop,
+        then view the crop to check you got it — adjust and re-crop if the
+        box was off. Show the student the CROP, never the whole page.
+
+        Args:
+            image: The `file` path (or `embed` p= value) of an image under
+                the figures store.
+            left: Left edge, 0-100 (% of width).
+            top: Top edge, 0-100 (% of height).
+            right: Right edge, 0-100.
+            bottom: Bottom edge, 0-100.
+        """
+        from ..core.images import crop_image_file
+
+        root = spaces_root()
+        cleaned = image.strip().replace("\\", "/")
+        if cleaned.startswith("/api/spacefile?p="):
+            cleaned = cleaned[len("/api/spacefile?p="):]
+        candidate = Path(cleaned)
+        target = candidate if candidate.is_absolute() else root / cleaned
+        try:
+            target = target.resolve()
+            target.relative_to(root)
+        except (ValueError, OSError):
+            return {"error": "Image must live under the spaces folder (use the `file` path a figure tool returned)."}
+        if not target.is_file():
+            return {"error": f"No image at '{image}'."}
+
+        result = crop_image_file(target, left, top, right, bottom)
+        if isinstance(result, str):
+            return {"error": result}
+        name, blob = result
+        out_path = target.parent / name
+        out_path.write_bytes(blob)
+        rel = out_path.relative_to(root).as_posix()
+        return {
+            "name": name,
+            "file": str(out_path),
+            "embed": f"/api/spacefile?p={rel}",
+            "sizeBytes": len(blob),
+            "note": "Read the `file` to verify the crop caught the figure; re-crop with an adjusted box if not. " + _HOW_TO_USE,
+        }
+
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @validate_params
     async def fetch_web_image(url: str) -> dict:
         """Download one image from the web so you can view it (Read) and show
         it to the student (embed URL). Use for figures found via WebSearch/

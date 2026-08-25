@@ -74,6 +74,9 @@ READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
     "render_document_pages": _safe(
         "Returns filesystem paths of rendered page images; no Canvas-authored free text beyond a filename."
     ),
+    "crop_image": _safe(
+        "Returns the filesystem path of a cropped image; no Canvas-authored text."
+    ),
     "fetch_web_image": _safe(
         "Returns the local path of a downloaded image; no Canvas content at all."
     ),

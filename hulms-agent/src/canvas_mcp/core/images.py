@@ -180,6 +180,35 @@ def render_pdf_pages(
         pdf.close()
 
 
+def crop_image_file(
+    src: Path, left: float, top: float, right: float, bottom: float
+) -> tuple[str, bytes] | str:
+    """Crop an image by percentage box (0-100 from top-left); str = error.
+
+    Percentages, not pixels, because the caller is a model looking at the
+    image — "the figure spans roughly 10-90% wide, 20-55% down" is how
+    vision naturally localizes.
+    """
+    from PIL import Image
+
+    if not (0 <= left < right <= 100 and 0 <= top < bottom <= 100):
+        return "Box must satisfy 0 <= left < right <= 100 and 0 <= top < bottom <= 100."
+    try:
+        img = Image.open(src)
+    except Exception as e:
+        return f"Could not open image: {type(e).__name__}: {e}"
+    w, h = img.size
+    box = (
+        int(w * left / 100), int(h * top / 100),
+        int(w * right / 100), int(h * bottom / 100),
+    )
+    cropped = img.crop(box)
+    buf = io.BytesIO()
+    cropped.save(buf, format="PNG")
+    name = f"{src.stem}-crop-{int(left)}x{int(top)}-{int(right)}x{int(bottom)}.png"
+    return name, buf.getvalue()
+
+
 def figures_dir(source_key: str) -> Path:
     """Where a source's extracted figures live (under the gitignored spaces/)."""
     safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in source_key)[:80]
