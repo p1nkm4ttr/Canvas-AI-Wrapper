@@ -68,6 +68,20 @@
 
 .md hr { border: 0; border-top: 1px solid #2c343f; margin: 1em 0; }
 
+.md img {
+  box-sizing: border-box; /* border counts inside max-width */
+  max-width: 100%;
+  max-height: 65vh;
+  width: auto;
+  height: auto;
+  display: block;
+  margin: 0.6em 0;
+  border: 1px solid #2c343f;
+  border-radius: 8px;
+  background: #fff; /* rendered PDF pages are white; keeps edges clean */
+  cursor: zoom-in;
+}
+
 .md .katex { font-size: 1.05em; }
 .md .katex-display {
   overflow-x: auto;

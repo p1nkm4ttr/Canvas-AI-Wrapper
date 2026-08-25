@@ -60,6 +60,11 @@ function Md({ text }) {
         rehypePlugins={[rehypeKatex]}
         components={{
           a: (props) => <a {...props} target="_blank" rel="noreferrer" />,
+          img: (props) => (
+            // Fit the bubble; click opens the full-size original in a new tab.
+            <img {...props} alt={props.alt || "figure"}
+                 onClick={() => window.open(props.src, "_blank")} />
+          ),
         }}
       >
         {mathify(text)}
