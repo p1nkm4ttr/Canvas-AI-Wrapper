@@ -9,10 +9,15 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// POST {message, spaceId, courseName?, sessionId?} -> SSE stream of the
-// claude -p stream-json lines, one per `data:` event.
+// Selectable models; anything else falls through to the CLI's configured
+// default. Sonnet is the UI default — coach work is tool orchestration and
+// quizzing, which doesn't need the flagship burning the usage limits.
+const ALLOWED_MODELS = new Set(["sonnet", "haiku", "opus", "fable"]);
+
+// POST {message, spaceId, courseName?, sessionId?, model?} -> SSE stream of
+// the claude -p stream-json lines, one per `data:` event.
 export async function POST(req) {
-  const { message, spaceId, courseName, sessionId } = await req.json();
+  const { message, spaceId, courseName, sessionId, model } = await req.json();
   if (!message || typeof message !== "string") {
     return Response.json({ error: "message required" }, { status: 400 });
   }
@@ -32,6 +37,7 @@ export async function POST(req) {
     "--include-partial-messages",
   ];
   if (sessionId) args.push("--resume", sessionId);
+  if (ALLOWED_MODELS.has(model)) args.push("--model", model);
 
   // Build brief trap #2: if ANTHROPIC_API_KEY exists anywhere, Claude Code
   // uses it instead of the subscription. Strip it (and never pass --bare).

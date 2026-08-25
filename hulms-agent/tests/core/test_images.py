@@ -21,6 +21,7 @@ def _png(size=(64, 64), color=(200, 30, 30)):
 def _noisy_png(size=(128, 128)):
     """Incompressible image that clears the tiny-logo byte filter."""
     import os
+
     from PIL import Image
     img = Image.frombytes("RGB", size, os.urandom(size[0] * size[1] * 3))
     buf = io.BytesIO()
@@ -51,33 +52,53 @@ def fake_root(tmp_path, monkeypatch):
 
 def test_pptx_pictures_extracted():
     data = _pptx_with_pictures(_png())
-    images = extract_document_images(data, "deck.pptx", min_bytes=0)
-    assert isinstance(images, list) and len(images) == 1
-    name, blob = images[0]
+    result = extract_document_images(data, "deck.pptx", min_bytes=0)
+    assert len(result["images"]) == 1
+    name, blob = result["images"][0]
     assert name.startswith("slide001") and blob[:4] == b"\x89PNG"
+    assert result["unit"] == "slide" and result["total"] == 1
 
 
 def test_duplicate_pictures_deduped():
     same = _png()
     data = _pptx_with_pictures(same, same)
-    images = extract_document_images(data, "deck.pptx", min_bytes=0)
-    assert len(images) == 1
+    result = extract_document_images(data, "deck.pptx", min_bytes=0)
+    assert len(result["images"]) == 1
 
 
 def test_tiny_images_filtered():
     data = _pptx_with_pictures(_png(size=(4, 4)))
-    assert extract_document_images(data, "deck.pptx", min_bytes=4096) == []
+    result = extract_document_images(data, "deck.pptx", min_bytes=4096)
+    assert result["images"] == [] and result["capped"] is False
 
 
 def test_unsupported_format_returns_note():
     result = extract_document_images(b"x", "notes.docx")
-    assert isinstance(result, str) and "No image extractor" in result
+    assert "No image extractor" in result["error"]
 
 
 def test_standalone_image_passthrough():
     png = _png()
-    images = extract_document_images(png, "diagram.png", min_bytes=0)
-    assert images == [("image.png", png)]
+    result = extract_document_images(png, "diagram.png", min_bytes=0)
+    assert result["images"] == [("image.png", png)]
+
+
+def test_slide_window_targets_later_slides():
+    """The textbook problem: early art must not shadow a targeted window."""
+    early, wanted = _noisy_png(), _noisy_png()
+    data = _pptx_with_pictures(early, early, wanted)
+    result = extract_document_images(data, "deck.pptx", min_bytes=0, first=3, last=3)
+    assert len(result["images"]) == 1
+    assert result["images"][0][0].startswith("slide003")
+    assert result["scannedFrom"] == 3 and result["scannedTo"] == 3
+
+
+def test_cap_is_reported_not_silent():
+    data = _pptx_with_pictures(_noisy_png(), _noisy_png(), _noisy_png())
+    result = extract_document_images(data, "deck.pptx", min_bytes=0, max_images=1)
+    assert len(result["images"]) == 1
+    assert result["capped"] is True
+    assert result["scannedTo"] < result["total"]
 
 
 def test_save_figures_returns_view_and_embed(fake_root):
@@ -160,3 +181,47 @@ async def test_fetch_web_image_rejects_non_image(fake_root):
 
     with patch("canvas_mcp.tools.images.httpx.AsyncClient", FakeClient):
         assert "error" in await get_tool("fetch_web_image")("https://example.com/page")
+
+
+def test_render_pdf_pages_rasterizes_vector_content():
+    """Vector-only PDFs (textbook line-art) yield nothing to the embedded-
+    image extractor but render fine as whole pages."""
+    from canvas_mcp.core.images import render_pdf_pages
+    from tests.core.test_extract import MINI_PDF  # text-only, zero embedded images
+
+    embedded = extract_document_images(MINI_PDF, "book.pdf", min_bytes=0)
+    assert embedded["images"] == []
+
+    rendered = render_pdf_pages(MINI_PDF, 1, 1)
+    assert len(rendered["images"]) == 1
+    name, blob = rendered["images"][0]
+    assert name == "render-page001.png" and blob[:4] == b"\x89PNG"
+
+
+def test_render_window_larger_than_document_is_not_capped():
+    from canvas_mcp.core.images import render_pdf_pages
+    from tests.core.test_extract import MINI_PDF
+    result = render_pdf_pages(MINI_PDF, 1, 50)
+    assert result["scannedTo"] == 1  # document only has one page
+    assert result["capped"] is False  # nothing was cut off — honest
+
+
+def test_render_caps_pages_per_call():
+    from pypdf import PdfWriter
+
+    from canvas_mcp.core.images import MAX_RENDER_PAGES, render_pdf_pages
+    writer = PdfWriter()
+    for _ in range(10):
+        writer.add_blank_page(width=200, height=200)
+    buf = io.BytesIO()
+    writer.write(buf)
+    result = render_pdf_pages(buf.getvalue(), 1, 10)
+    assert len(result["images"]) == MAX_RENDER_PAGES
+    assert result["scannedTo"] == MAX_RENDER_PAGES
+    assert result["capped"] is True
+
+
+def test_render_beyond_document_errors():
+    from canvas_mcp.core.images import render_pdf_pages
+    from tests.core.test_extract import MINI_PDF
+    assert "error" in render_pdf_pages(MINI_PDF, 99, 100)

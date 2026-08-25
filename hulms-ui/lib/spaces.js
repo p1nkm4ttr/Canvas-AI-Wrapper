@@ -100,6 +100,7 @@ export const ALLOWED_TOOLS = [
   "mcp__hulms__get_grade_weights",
   "mcp__hulms__get_my_grades",
   "mcp__hulms__get_document_images",
+  "mcp__hulms__render_document_pages",
   "mcp__hulms__fetch_web_image",
   "mcp__hulms__get_course_map",
   "mcp__hulms__create_planner_note",

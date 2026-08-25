@@ -156,6 +156,16 @@ export default function Home() {
   const [panelDirty, setPanelDirty] = useState(false);
   const [showIdeas, setShowIdeas] = useState(false);
   const [toast, setToast] = useState(null);
+  const [model, setModel] = useState("sonnet");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("hulms:model");
+    if (saved) setModel(saved);
+  }, []);
+  const pickModel = (m) => {
+    setModel(m);
+    localStorage.setItem("hulms:model", m);
+  };
   const scrollRef = useRef(null);
   const abortRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -322,7 +332,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text, spaceId: space, sessionId: sid,
+          message: text, spaceId: space, sessionId: sid, model,
           courseName: course ? `${course.name} (${course.term})` : null,
         }),
         signal: controller.signal,
@@ -467,6 +477,15 @@ export default function Home() {
             {activeConv && <span style={{ color: C.dim, fontWeight: 400 }}> · {activeConv.title}</span>}
             {activeConv?.sessionId && <span style={{ color: C.dim, fontWeight: 400, fontSize: 12 }}> · session continues</span>}
           </div>
+          <select value={model} onChange={(e) => pickModel(e.target.value)}
+            title="Model for coach replies — Sonnet is plenty for most study work; heavier models burn your usage limits faster"
+            style={{ background: C.panelSoft, color: C.text, border: `1px solid ${C.border}`, borderRadius: 6, padding: "5px 8px", fontSize: 12, cursor: "pointer" }}>
+            <option value="haiku">haiku · fastest</option>
+            <option value="sonnet">sonnet · everyday</option>
+            <option value="opus">opus · hard problems</option>
+            <option value="fable">fable · maximum</option>
+            <option value="default">CLI default</option>
+          </select>
           {["memory", "plan"].map((t) => (
             <button key={t} onClick={() => (panelTab === t ? setPanelTab(null) : openPanel(t))}
               style={{ background: panelTab === t ? C.tool : C.panelSoft, color: C.text, border: `1px solid ${C.border}`, borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12 }}>

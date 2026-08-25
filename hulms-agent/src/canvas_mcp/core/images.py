@@ -24,15 +24,24 @@ def _dedupe_key(data: bytes) -> str:
     return hashlib.md5(data).hexdigest()
 
 
-def _pdf_images(data: bytes, cap: int, min_bytes: int) -> list[tuple[str, bytes]]:
+def _pdf_images(
+    data: bytes, cap: int, min_bytes: int,
+    first: int = 1, last: int | None = None,
+) -> dict[str, Any]:
     from pypdf import PdfReader
 
     out: list[tuple[str, bytes]] = []
     seen: set[str] = set()
     reader = PdfReader(io.BytesIO(data))
-    for page_num, page in enumerate(reader.pages, 1):
+    total = len(reader.pages)
+    first = max(1, first)
+    last = min(last or total, total)
+    reached = first
+    capped = False
+    for page_num in range(first, last + 1):
+        reached = page_num
         try:
-            images = page.images
+            images = reader.pages[page_num - 1].images
         except Exception:
             continue  # one bad page must not kill the rest
         for img in images:
@@ -49,19 +58,31 @@ def _pdf_images(data: bytes, cap: int, min_bytes: int) -> list[tuple[str, bytes]
             ext = file_extension(img.name) or ".png"
             out.append((f"page{page_num:03d}-{len(out) + 1}{ext}", blob))
             if len(out) >= cap:
-                return out
-    return out
+                capped = page_num < last
+                return {"images": out, "unit": "page", "total": total,
+                        "scannedFrom": first, "scannedTo": page_num, "capped": capped}
+    return {"images": out, "unit": "page", "total": total,
+            "scannedFrom": first, "scannedTo": reached, "capped": False}
 
 
-def _pptx_images(data: bytes, cap: int, min_bytes: int) -> list[tuple[str, bytes]]:
+def _pptx_images(
+    data: bytes, cap: int, min_bytes: int,
+    first: int = 1, last: int | None = None,
+) -> dict[str, Any]:
     from pptx import Presentation
     from pptx.enum.shapes import MSO_SHAPE_TYPE
 
     out: list[tuple[str, bytes]] = []
     seen: set[str] = set()
     prs = Presentation(io.BytesIO(data))
-    for slide_num, slide in enumerate(prs.slides, 1):
-        for shape in slide.shapes:
+    slides = list(prs.slides)
+    total = len(slides)
+    first = max(1, first)
+    last = min(last or total, total)
+    reached = first
+    for slide_num in range(first, last + 1):
+        reached = slide_num
+        for shape in slides[slide_num - 1].shapes:
             if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
                 continue
             try:
@@ -77,8 +98,11 @@ def _pptx_images(data: bytes, cap: int, min_bytes: int) -> list[tuple[str, bytes
             seen.add(key)
             out.append((f"slide{slide_num:03d}-{len(out) + 1}{ext}", blob))
             if len(out) >= cap:
-                return out
-    return out
+                return {"images": out, "unit": "slide", "total": total,
+                        "scannedFrom": first, "scannedTo": slide_num,
+                        "capped": slide_num < last}
+    return {"images": out, "unit": "slide", "total": total,
+            "scannedFrom": first, "scannedTo": reached, "capped": False}
 
 
 def extract_document_images(
@@ -86,20 +110,74 @@ def extract_document_images(
     filename: str,
     max_images: int = DEFAULT_MAX_IMAGES,
     min_bytes: int = MIN_IMAGE_BYTES,
-) -> list[tuple[str, bytes]] | str:
-    """Embedded images of a PDF/PPTX as (name, bytes); a str is an error note."""
+    first: int = 1,
+    last: int | None = None,
+) -> dict[str, Any]:
+    """Embedded images of a PDF/PPTX, optionally within a page/slide window.
+
+    Returns {images: [(name, bytes)], unit, total, scannedFrom, scannedTo,
+    capped} — or {error: str}. `capped` means the max_images limit stopped
+    the scan before the window's end: later figures exist but were not
+    reached (the textbook problem — front matter exhausts the cap).
+    """
     ext = file_extension(filename)
     try:
         if ext == ".pdf":
-            return _pdf_images(data, max_images, min_bytes)
+            return _pdf_images(data, max_images, min_bytes, first, last)
         if ext == ".pptx":
-            return _pptx_images(data, max_images, min_bytes)
+            return _pptx_images(data, max_images, min_bytes, first, last)
         if ext in _IMAGE_EXTS:
             # The document IS an image.
-            return [(f"image{ext}", data)] if len(data) >= min_bytes else []
-        return f"No image extractor for '{ext or 'file without extension'}' (PDF and PPTX carry figures)."
+            images = [(f"image{ext}", data)] if len(data) >= min_bytes else []
+            return {"images": images, "unit": "image", "total": 1,
+                    "scannedFrom": 1, "scannedTo": 1, "capped": False}
+        return {"error": f"No image extractor for '{ext or 'file without extension'}' (PDF and PPTX carry figures)."}
     except Exception as e:
-        return f"Image extraction failed: {type(e).__name__}: {e}"
+        return {"error": f"Image extraction failed: {type(e).__name__}: {e}"}
+
+
+MAX_RENDER_PAGES = 6
+
+
+def render_pdf_pages(
+    data: bytes, first: int, last: int, scale: float = 2.0
+) -> dict[str, Any]:
+    """Rasterize whole PDF pages to PNG — the answer for VECTOR figures.
+
+    Textbook diagrams are usually line-art, not embedded images, so
+    extract_document_images finds nothing; rendering the page itself makes
+    them visible regardless. Capped at MAX_RENDER_PAGES per call.
+    """
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return {"error": "pypdfium2 is not installed."}
+
+    try:
+        pdf = pdfium.PdfDocument(data)
+    except Exception as e:
+        return {"error": f"Could not open PDF: {type(e).__name__}: {e}"}
+    try:
+        total = len(pdf)
+        first = max(1, first)
+        last = min(last, total)
+        if first > total:
+            return {"error": f"Page {first} is beyond the document ({total} pages)."}
+        capped = (last - first + 1) > MAX_RENDER_PAGES
+        if capped:
+            last = first + MAX_RENDER_PAGES - 1
+
+        out: list[tuple[str, bytes]] = []
+        for page_num in range(first, last + 1):
+            page = pdf[page_num - 1]
+            bitmap = page.render(scale=scale)
+            buf = io.BytesIO()
+            bitmap.to_pil().save(buf, format="PNG")
+            out.append((f"render-page{page_num:03d}.png", buf.getvalue()))
+        return {"images": out, "unit": "page", "total": total,
+                "scannedFrom": first, "scannedTo": last, "capped": capped}
+    finally:
+        pdf.close()
 
 
 def figures_dir(source_key: str) -> Path:
