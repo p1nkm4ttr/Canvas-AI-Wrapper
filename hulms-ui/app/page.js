@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -52,7 +52,10 @@ function mathify(src) {
     .replace(/\\\((.*?)\\\)/g, (_, m) => `$${m}$`);
 }
 
-function Md({ text }) {
+/* Memoized: markdown + KaTeX parsing is the most expensive thing on the
+   page, and without memo every keystroke and every streamed token re-ran
+   it for every message in the conversation. */
+const Md = memo(function Md({ text }) {
   return (
     <div className="md">
       <ReactMarkdown
@@ -71,6 +74,12 @@ function Md({ text }) {
       </ReactMarkdown>
     </div>
   );
+});
+
+/* The in-flight reply renders as plain text (cheap) until it completes,
+   then switches to the memoized markdown render — parsed exactly once. */
+function StreamingText({ text }) {
+  return <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{text}</div>;
 }
 
 /* ---------- conversation store: multiple named conversations per space ----------
@@ -154,7 +163,13 @@ export default function Home() {
   const [course, setCourse] = useState(null); // null = General
   const [convs, setConvs] = useState({ list: [], activeId: null });
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
+  // Streams are independent of the view: each in-flight reply is keyed by
+  // space/conversation, flushes into the page only while that conversation
+  // is displayed, and always persists to its OWN space's storage. So you can
+  // switch courses or chats while a reply is still streaming.
+  const [busyKeys, setBusyKeys] = useState(() => new Set());
+  const streamsRef = useRef({}); // key -> { controller }
+  const spaceRef = useRef("general");
   const [copied, setCopied] = useState(null);
   const [panelTab, setPanelTab] = useState(null); // "memory" | "plan" | null
   const [panelText, setPanelText] = useState("");
@@ -172,12 +187,15 @@ export default function Home() {
     localStorage.setItem("hulms:model", m);
   };
   const scrollRef = useRef(null);
-  const abortRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const space = spaceIdFor(course);
   const activeConv = convs.list.find((c) => c.id === convs.activeId) || null;
   const messages = activeConv?.messages || [];
+  const streamKey = (sp, id) => `${sp}/${id}`;
+  // "busy" means: THIS displayed conversation has a reply in flight.
+  const busy = activeConv ? busyKeys.has(streamKey(space, activeConv.id)) : false;
+  useEffect(() => { spaceRef.current = space; }, [space]);
 
   useEffect(() => {
     fetch("/api/courses").then((r) => r.json()).then((d) => {
@@ -203,10 +221,9 @@ export default function Home() {
   }, [space]);
 
   /* ---------- conversation ops ---------- */
-  const selectConv = (id) => { if (!busy) persist({ ...convs, activeId: id }); };
+  const selectConv = (id) => persist({ ...convs, activeId: id });
 
   const newConversation = () => {
-    if (busy) return;
     const conv = { id: newId(), title: "New chat", sessionId: null, messages: [], updatedAt: Date.now() };
     persist({ list: [conv, ...convs.list], activeId: conv.id });
   };
@@ -222,7 +239,10 @@ export default function Home() {
   };
 
   const deleteConversation = (id) => {
-    if (busy) return;
+    if (busyKeys.has(streamKey(space, id))) {
+      flashToast("That chat is still replying — stop it first.");
+      return;
+    }
     const conv = convs.list.find((c) => c.id === id);
     if (!window.confirm(`Delete "${conv?.title}"? The chat log is removed (memory.md and plan.md stay).`)) return;
     const list = convs.list.filter((c) => c.id !== id);
@@ -291,16 +311,22 @@ export default function Home() {
   async function send(overrideText) {
     const text = (overrideText ?? input).trim();
     if (!text || busy) return;
+    if (busyKeys.size >= 2) {
+      flashToast("Two replies are already running — each spawns a Claude process; let one finish first.");
+      return;
+    }
     if (overrideText == null) setInput("");
-    setBusy(true);
 
     // Ensure there is an active conversation to stream into.
+    const sp = space; // the space this reply belongs to, whatever is shown later
     let conv = activeConv;
     let list = convs.list;
     if (!conv) {
       conv = { id: newId(), title: "New chat", sessionId: null, messages: [], updatedAt: Date.now() };
       list = [conv, ...list];
     }
+    const key = streamKey(sp, conv.id);
+    setBusyKeys((prev) => new Set(prev).add(key));
 
     const msgs = [...conv.messages, { role: "user", segments: [{ kind: "text", text }] }];
     const assistant = { role: "assistant", segments: [] };
@@ -315,12 +341,23 @@ export default function Home() {
     list = list.map((c) => (c.id === conv.id ? conv : c));
     persist({ list, activeId: conv.id });
 
-    const update = () => {
+    // Deltas arrive many times per second; rendering each one re-rendered
+    // the whole page. Coalesce: mutate the local reply, flush at most once
+    // per animation frame.
+    let flushScheduled = false;
+    const flush = () => {
+      flushScheduled = false;
       conv = { ...conv, messages: [...msgs.slice(0, -1), { ...assistant, segments: [...assistant.segments] }], updatedAt: Date.now() };
+      if (spaceRef.current !== sp) return; // another space is on screen; leave its list alone
       setConvs((prev) => ({
         list: prev.list.map((c) => (c.id === conv.id ? conv : c)),
         activeId: prev.activeId,
       }));
+    };
+    const update = () => {
+      if (flushScheduled) return;
+      flushScheduled = true;
+      requestAnimationFrame(flush);
     };
     const appendText = (t) => {
       const last = assistant.segments[assistant.segments.length - 1];
@@ -331,13 +368,13 @@ export default function Home() {
 
     let sid = conv.sessionId;
     const controller = new AbortController();
-    abortRef.current = controller;
+    streamsRef.current[key] = { controller };
     try {
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text, spaceId: space, sessionId: sid, model,
+          message: text, spaceId: sp, sessionId: sid, model,
           courseName: course ? `${course.name} (${course.term})` : null,
         }),
         signal: controller.signal,
@@ -380,17 +417,25 @@ export default function Home() {
     } catch (e) {
       if (e.name !== "AbortError") appendText(`\n\n> [connection error: ${e}]`);
     } finally {
-      abortRef.current = null;
-      setBusy(false);
-      conv = { ...conv, sessionId: sid };
-      setConvs((prev) => {
-        const state = {
-          list: prev.list.map((c) => (c.id === conv.id ? conv : c)),
-          activeId: prev.activeId,
-        };
-        store.save(space, state);
-        return state;
-      });
+      delete streamsRef.current[key];
+      setBusyKeys((prev) => { const n = new Set(prev); n.delete(key); return n; });
+      // Final, unthrottled flush with the complete reply and session id,
+      // merged into the reply's OWN space storage - never the displayed one.
+      conv = {
+        ...conv,
+        sessionId: sid,
+        messages: [...msgs.slice(0, -1), { ...assistant, segments: [...assistant.segments] }],
+        updatedAt: Date.now(),
+      };
+      const stored = store.load(sp);
+      const state = {
+        list: stored.list.some((c) => c.id === conv.id)
+          ? stored.list.map((c) => (c.id === conv.id ? conv : c))
+          : [conv, ...stored.list],
+        activeId: stored.activeId ?? conv.id,
+      };
+      store.save(sp, state);
+      if (spaceRef.current === sp) setConvs(state);
     }
   }
 
@@ -427,24 +472,24 @@ export default function Home() {
         <div style={{ fontWeight: 700, fontSize: 15, margin: "4px 0 14px 4px" }}>
           HULMS <span style={{ color: C.accent }}>Assistant</span>
         </div>
-        {sideItem("general", "General", !course, () => !busy && setCourse(null))}
+        {sideItem("general", "General", !course, () => setCourse(null))}
         <div style={{ color: C.dim, fontSize: 11, margin: "14px 4px 6px", textTransform: "uppercase", letterSpacing: 1 }}>This semester</div>
-        {active.map((c) => sideItem(c.id, c.label, course?.id === c.id, () => !busy && setCourse(c)))}
+        {active.map((c) => sideItem(c.id, c.label, course?.id === c.id, () => setCourse(c)))}
         <div onClick={() => setShowCompleted(!showCompleted)}
              style={{ color: C.dim, fontSize: 11, margin: "14px 4px 6px", cursor: "pointer", textTransform: "uppercase", letterSpacing: 1 }}>
           {showCompleted ? "▾" : "▸"} Past courses ({completed.length})
         </div>
         {showCompleted && completed.map((c) =>
-          sideItem(c.id, c.label, course?.id === c.id, () => !busy && setCourse(c), true))}
+          sideItem(c.id, c.label, course?.id === c.id, () => setCourse(c), true))}
         {courseError && <div style={{ color: C.warn, fontSize: 12, marginTop: 10 }}>courses failed: {courseError}</div>}
       </div>
 
       {/* conversations column */}
       <div style={{ width: 215, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
         <div style={{ padding: 10 }}>
-          <button onClick={newConversation} disabled={busy} style={{
+          <button onClick={newConversation} style={{
             width: "100%", background: C.panelSoft, color: C.text, border: `1px solid ${C.border}`,
-            borderRadius: 8, padding: "8px 0", cursor: busy ? "default" : "pointer", fontSize: 13,
+            borderRadius: 8, padding: "8px 0", cursor: "pointer", fontSize: 13,
           }}>＋ new chat</button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 8px" }}>
@@ -461,7 +506,10 @@ export default function Home() {
                 <div style={{ flex: 1, fontSize: 12.5, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
                   {c.title}
                 </div>
-                <div style={{ color: C.dim, fontSize: 10, flexShrink: 0 }}>{timeAgo(c.updatedAt)}</div>
+                <div style={{ color: C.dim, fontSize: 10, flexShrink: 0 }}>
+                  {busyKeys.has(streamKey(space, c.id)) ? <span style={{ color: C.accent }}>&#9679; </span> : null}
+                  {timeAgo(c.updatedAt)}
+                </div>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
                 <span onClick={(e) => { e.stopPropagation(); renameConversation(c.id); }}
@@ -481,6 +529,9 @@ export default function Home() {
             {course ? (course.label || course.name.split("-")[0]) : "General"}
             {activeConv && <span style={{ color: C.dim, fontWeight: 400 }}> · {activeConv.title}</span>}
             {activeConv?.sessionId && <span style={{ color: C.dim, fontWeight: 400, fontSize: 12 }}> · session continues</span>}
+            {busyKeys.size > 0 && !busy && (
+              <span style={{ color: C.accent, fontWeight: 400, fontSize: 12 }}> · {busyKeys.size} reply running elsewhere</span>
+            )}
           </div>
           <select value={model} onChange={(e) => pickModel(e.target.value)}
             title="Model for coach replies — Sonnet is plenty for most study work; heavier models burn your usage limits faster"
@@ -543,7 +594,9 @@ export default function Home() {
                           ⚙ {s.name.replace("mcp__hulms__", "")}
                         </span>
                       ) : m.role === "assistant" ? (
-                        <Md key={j} text={s.text} />
+                        busy && i === messages.length - 1
+                          ? <StreamingText key={j} text={s.text} />
+                          : <Md key={j} text={s.text} />
                       ) : (
                         <div key={j} style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{s.text}</div>
                       )
@@ -619,7 +672,7 @@ export default function Home() {
               style={{ flex: 1, background: C.panel, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 14, resize: "none", outline: "none" }}
             />
             {busy ? (
-              <button onClick={() => abortRef.current?.abort()} style={{ background: C.warn, color: "#111", border: 0, borderRadius: 8, padding: "0 18px", cursor: "pointer", fontWeight: 600 }}>stop</button>
+              <button onClick={() => streamsRef.current[streamKey(space, activeConv?.id)]?.controller.abort()} style={{ background: C.warn, color: "#111", border: 0, borderRadius: 8, padding: "0 18px", cursor: "pointer", fontWeight: 600 }}>stop</button>
             ) : (
               <button onClick={() => send()} style={{ background: C.accent, color: "#111", border: 0, borderRadius: 8, padding: "0 18px", cursor: "pointer", fontWeight: 600 }}>send</button>
             )}

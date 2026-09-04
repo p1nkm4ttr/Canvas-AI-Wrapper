@@ -54,8 +54,26 @@ export async function POST(req) {
     start(controller) {
       let buffer = "";
       let closed = false;
+      // Forward only what the page renders. --verbose stream-json also
+      // emits full assistant/user messages carrying complete tool results
+      // (a study context is ~77 KB) and tool-argument deltas; shipping
+      // those to the browser to be JSON.parsed and discarded was a real
+      // source of UI jank.
+      const wanted = (line) => {
+        let obj;
+        try { obj = JSON.parse(line); } catch { return false; }
+        if (obj.type === "system") return obj.subtype === "init";
+        if (obj.type === "result") return true;
+        if (obj.type === "stream_event") {
+          const ev = obj.event || {};
+          if (ev.type === "content_block_delta") return ev.delta?.type === "text_delta";
+          if (ev.type === "content_block_start") return ev.content_block?.type === "tool_use";
+          return false;
+        }
+        return obj.type === "stderr" || obj.type === "spawn_error";
+      };
       const send = (line) => {
-        if (closed || !line.trim()) return;
+        if (closed || !line.trim() || !wanted(line)) return;
         controller.enqueue(encoder.encode(`data: ${line}\n\n`));
       };
       const finish = () => {
