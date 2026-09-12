@@ -219,18 +219,31 @@ def register_surface_tools(mcp: FastMCP) -> None:
         if not names:
             return {"announcements": [], "count": 0, "note": "no active courses"}
 
-        start = (datetime.now(timezone.utc) - timedelta(days=since_days)).strftime("%Y-%m-%d")
+        now = datetime.now(timezone.utc)
+        start = (now - timedelta(days=since_days)).strftime("%Y-%m-%d")
+        # Canvas defaults end_date to START + 28 DAYS, not "now". Without an
+        # explicit end, any since_days > 28 silently closes the window in the
+        # past and drops every recent announcement (measured live: a 60-day
+        # query returned 2 stale posts instead of 31). Tomorrow, so timezone
+        # edges can never clip today's posts.
+        end = (now + timedelta(days=1)).strftime("%Y-%m-%d")
         collected: list[dict] = []
+        unchecked: list[str] = []
         # context_codes is limited to 10 contexts per request — chunk, but it
         # stays ONE batched call per 10 courses, never one per course.
         for chunk in _chunk(sorted(names), 10):
             batch = await fetch_all_paginated_results(
                 "/announcements",
-                {"context_codes[]": chunk, "start_date": start, "per_page": 100},
+                {"context_codes[]": chunk, "start_date": start, "end_date": end,
+                 "per_page": 100},
             )
             if _is_err(batch):
-                return batch
+                # Keep what other chunks returned; report the gap honestly.
+                unchecked.extend(names[c] for c in chunk)
+                continue
             collected.extend(batch)
+        if unchecked and not collected and len(unchecked) == len(names):
+            return {"error": "Could not fetch announcements for any course."}
 
         collected.sort(key=lambda a: a.get("posted_at") or "", reverse=True)
         shaped = []
@@ -246,9 +259,18 @@ def register_surface_tools(mcp: FastMCP) -> None:
                 "url": absolute_url(ann.get("html_url")),
             })
         items, note = _cap(shaped, "announcements")
-        result = {"announcements": items, "count": len(shaped)}
+        result = {
+            "announcements": items,
+            "count": len(shaped),
+            "window": {"since": start, "until": end},
+        }
         if note:
             result["note"] = note
+        if unchecked:
+            result["coverage"] = (
+                "Could not check these courses (say so if it matters): "
+                + "; ".join(unchecked)
+            )
         return result
 
     # ---------------------------------------------------------------- calendar

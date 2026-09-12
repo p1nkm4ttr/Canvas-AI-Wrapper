@@ -172,6 +172,35 @@ async def test_announcements_one_batched_call_and_shape(mock_fetch):
     assert ann["url"].startswith("https://canvas.school.edu/")
 
 
+async def test_announcements_always_send_end_date(mock_fetch):
+    """Canvas defaults end_date to start_date + 28 days (NOT now). A 60-day
+    query without an explicit end silently dropped every recent announcement
+    -- measured live. Guard the parameter, not just the behavior."""
+    def responses(endpoint, params=None):
+        if endpoint == "/courses":
+            return [{"id": 1, "name": "CS 101"}]
+        assert "end_date" in params, "end_date must always be explicit"
+        assert params["end_date"] > params["start_date"]
+        return []
+    mock_fetch.side_effect = lambda e, p=None: responses(e, p)
+    result = await get_tool("get_announcements")(since_days=60)
+    assert result["window"]["since"] < result["window"]["until"]
+
+
+async def test_announcements_partial_failure_keeps_other_chunks(mock_fetch):
+    def responses(endpoint, params=None):
+        if endpoint == "/courses":
+            return [{"id": i, "name": f"C{i}"} for i in range(1, 13)]
+        if "course_1" in params["context_codes[]"]:
+            return {"error": "HTTP error: 429"}
+        return [{"context_code": params["context_codes[]"][0], "title": "ok",
+                 "posted_at": "2026-09-01T05:00:00Z", "message": "", "html_url": "/x"}]
+    mock_fetch.side_effect = lambda e, p=None: responses(e, p)
+    result = await get_tool("get_announcements")()
+    assert result["count"] == 1
+    assert "coverage" in result and "C1" in result["coverage"]
+
+
 async def test_announcements_chunks_contexts_by_ten(mock_fetch):
     def responses(endpoint, params=None):
         if endpoint == "/courses":

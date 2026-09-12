@@ -66,11 +66,14 @@ async def run(force: bool = False) -> int:
 
     # 3. Announcements posted since yesterday morning.
     since = (today - timedelta(days=1)).isoformat()
+    # Explicit end_date: Canvas defaults it to start+28d, not now.
+    until = (today + timedelta(days=1)).isoformat()
     announcements: list[dict] = []
     for chunk in _chunk([f"course_{cid}" for cid in names], 10):
         batch = await fetch_all_paginated_results(
             "/announcements",
-            {"context_codes[]": chunk, "start_date": since, "per_page": 100},
+            {"context_codes[]": chunk, "start_date": since, "end_date": until,
+             "per_page": 100},
         )
         if isinstance(batch, list):
             announcements.extend(batch)
