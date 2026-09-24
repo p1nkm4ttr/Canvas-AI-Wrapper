@@ -60,7 +60,7 @@ Date arithmetic and grade math happen in the tools, never in the model.
 
 ## Requirements
 
-- Windows (paths, Task Scheduler, and launch scripts are Windows-specific)
+- Windows or macOS (launchers and scheduling are per-platform; see Setup)
 - Python 3.10+, Node.js 22+
 - [Claude Code](https://claude.com/claude-code) installed and signed in
   (subscription auth; no API key is used anywhere)
@@ -70,14 +70,7 @@ Date arithmetic and grade math happen in the tools, never in the model.
 
 ## Setup
 
-```bash
-# 1. The MCP server
-cd hulms-agent
-python -m venv .venv
-.venv\Scripts\pip install -e .
-```
-
-Create `hulms-agent/.env`:
+Create `hulms-agent/.env` (gitignored) on either platform:
 
 ```
 CANVAS_HOST=https://your-school.instructure.com
@@ -85,28 +78,29 @@ CANVAS_TOKEN=your-token-here
 TIMEZONE=Asia/Karachi
 ```
 
-```bash
-# 2. Verify
-.venv\Scripts\hulms-server --test     # should print your Canvas name
+Then, per platform (all paths relative to the repo root):
 
-# 3. The chat UI
-cd ../hulms-ui
-npm install
-dev.cmd                               # starts on http://localhost:3117 and opens the browser
-```
+| | Windows | macOS |
+|---|---|---|
+| MCP server | `cd hulms-agent`, `python -m venv .venv`, `.venv\Scripts\pip install -e .` | `cd hulms-agent`, `python3 -m venv .venv`, `.venv/bin/pip install -e .` |
+| Verify | `.venv\Scripts\hulms-server --test` prints your Canvas name | `.venv/bin/hulms-server --test` prints your Canvas name |
+| Chat UI | `cd hulms-ui`, `npm install`, then `dev.cmd` (dev) or `start.cmd` (built, faster) | `cd hulms-ui`, `npm install`, then `./dev.sh` or `./start.sh` |
+| Claude Desktop | add `hulms-agent\.venv\Scripts\hulms-server.exe` as MCP server `hulms` in `%APPDATA%\Claude\claude_desktop_config.json` | add `hulms-agent/.venv/bin/hulms-server` as MCP server `hulms` in `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Daily brief + weekly backup | Task Scheduler: `hulms-brief.exe --force` daily 07:30, `hulms-backup.exe` Sun 20:00, plus an at-logon `hulms-brief.exe` (skips if today's exists) | `hulms-ui/launchd/` plists, same times; launchd replays a run missed during sleep on wake, so no at-logon job (see `launchd/README.md`) |
+| Phone calendar | allow inbound TCP 3117 in Windows Firewall (Private profile) | the macOS firewall, if on, prompts once for `node`; allow it |
 
-Optional, recommended:
+macOS gotcha: if the repo lives in an iCloud-synced folder (Desktop or
+Documents), iCloud marks dot-folders hidden and Python then ignores the
+venv's `.pth` file, so `import canvas_mcp` fails. Either keep the repo
+outside iCloud, or create the venv as `venv.nosync` and symlink `.venv` to
+it (`ln -s venv.nosync .venv`). Also keep `hulms.db` out of any synced
+folder; two syncing writers corrupt SQLite.
 
-- **Claude Desktop**: add `hulms-agent\.venv\Scripts\hulms-server.exe` as an
-  MCP server named `hulms` in `claude_desktop_config.json`.
-- **Phone calendar**: allow inbound TCP 3117 in Windows Firewall (Private
-  profile), then subscribe your phone (same Wi-Fi) to
-  `http://<pc-lan-ip>:3117/api/hulms.ics` as a subscribed calendar
-  (choose "continue without SSL" when iOS asks).
-- **Daily brief**: schedule `hulms-brief.exe --force` daily and/or drop a
-  Startup-folder script for at-logon runs (skips if today's brief exists).
-- **Weekly backup**: schedule `hulms-backup.exe` — zips the database and
-  spaces (never the token); pass a directory to target a USB/synced folder.
+Either UI launcher opens http://localhost:3117. For the phone, subscribe
+(same Wi-Fi) to `http://<this-machine's-lan-ip>:3117/api/hulms.ics` as a
+subscribed calendar, choosing "continue without SSL" when iOS asks.
+`hulms-backup` zips the database and spaces (never the token); pass a
+directory to target a USB/synced folder.
 
 ## Honest limitations
 

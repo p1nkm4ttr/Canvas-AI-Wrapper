@@ -15,7 +15,8 @@ tool surface were kept. Git history back to the fork point is intact.
 
 ```
 python -m venv .venv
-.venv\Scripts\pip install -e . --group dev
+.venv\Scripts\pip install -e . --group dev    # Windows
+.venv/bin/pip install -e . --group dev         # macOS / Linux
 ```
 
 `.env` (gitignored) in this directory:

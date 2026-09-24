@@ -1,11 +1,10 @@
 import { execFile } from "child_process";
-import path from "path";
-import { AGENT_BIN } from "../../../lib/spaces";
+import { agentBin } from "../../../lib/spaces";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const exe = path.join(AGENT_BIN, "hulms-courses.exe");
+  const exe = agentBin("hulms-courses");
   const body = await new Promise((resolve) => {
     execFile(exe, [], { timeout: 90_000 }, (err, stdout) => {
       if (err && !stdout) {

@@ -8,8 +8,11 @@ hulms MCP server.
 
 ## Run
 
-Double-click `dev.cmd` (or run it from a terminal). It starts the dev server
-and opens http://localhost:3117.
+Windows: double-click `dev.cmd` (or run it from a terminal). macOS:
+`./dev.sh`. Either starts the dev server and opens http://localhost:3117.
+`start.cmd` / `./start.sh` build once and serve the production bundle,
+which is noticeably snappier; use the dev launcher only when changing UI
+code. macOS scheduling lives in `launchd/`.
 
 ## How it's put together
 

@@ -6,7 +6,8 @@
 # Python virtual environment
 venv/
 fresh_venv/
-.venv/
+.venv
+venv.nosync/
 
 # Python cache files
 __pycache__/

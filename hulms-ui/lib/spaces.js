@@ -1,29 +1,51 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
+import { execFileSync, spawn } from "child_process";
 
 // hulms-ui/ lives next to hulms-agent/ inside the project root.
 export const PROJECT_ROOT = path.resolve(process.cwd(), "..");
 export const SPACES_DIR = path.join(PROJECT_ROOT, "spaces");
-export const AGENT_BIN = path.join(PROJECT_ROOT, "hulms-agent", ".venv", "Scripts");
+// Platform glue. The Python venv puts console scripts in Scripts\*.exe on
+// Windows and bin/* everywhere else; Claude Code installs to ~/.local/bin.
+const WIN = process.platform === "win32";
+export const AGENT_BIN = path.join(
+  PROJECT_ROOT,
+  "hulms-agent",
+  ".venv",
+  WIN ? "Scripts" : "bin"
+);
+export function agentBin(name) {
+  return path.join(AGENT_BIN, WIN ? `${name}.exe` : name);
+}
+export function claudeExe() {
+  const home = path.join(os.homedir(), ".local", "bin", WIN ? "claude.exe" : "claude");
+  if (fs.existsSync(home)) return home;
+  try {
+    const out = execFileSync(WIN ? "where" : "which", ["claude"], { encoding: "utf-8" });
+    const first = out.split(/\r?\n/).find((l) => l.trim());
+    if (first) return first.trim();
+  } catch {}
+  return home;
+}
+export function openFolder(dir) {
+  const opener = WIN ? "explorer.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+  spawn(opener, [dir], { detached: true, stdio: "ignore" }).unref();
+}
 // Generated at runtime (machine-specific absolute path; never committed).
 const MCP_CONFIG_PATH = path.join(process.cwd(), "hulms-mcp.local.json");
 
 export function ensureMcpConfig() {
   const config = {
     mcpServers: {
-      hulms: { command: path.join(AGENT_BIN, "hulms-server.exe"), args: [] },
+      hulms: { command: agentBin("hulms-server"), args: [] },
     },
   };
   fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(config, null, 2));
   return MCP_CONFIG_PATH;
 }
 export const COACH_FILE = path.join(process.cwd(), "coach.md");
-export const CLAUDE_EXE = path.join(
-  process.env.USERPROFILE || "",
-  ".local",
-  "bin",
-  "claude.exe"
-);
+export const CLAUDE_EXE = claudeExe();
 
 const SPACE_ID = /^[a-z0-9][a-z0-9-]{0,40}$/;
 

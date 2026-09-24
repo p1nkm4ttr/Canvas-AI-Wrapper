@@ -1,6 +1,5 @@
 import { execFile } from "child_process";
-import path from "path";
-import { AGENT_BIN } from "../../../lib/spaces";
+import { agentBin } from "../../../lib/spaces";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +7,7 @@ export const dynamic = "force-dynamic";
 // Subscribe from the iPhone: Settings > Calendar > Accounts > Add Account >
 // Other > Add Subscribed Calendar > http://<this-pc's-LAN-ip>:3117/api/hulms.ics
 export async function GET() {
-  const exe = path.join(AGENT_BIN, "hulms-ics.exe");
+  const exe = agentBin("hulms-ics");
   const ics = await new Promise((resolve) => {
     execFile(exe, [], { timeout: 120_000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
       resolve(err && !stdout ? null : stdout);
