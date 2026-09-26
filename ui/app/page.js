@@ -15,6 +15,39 @@ const C = {
 
 const spaceIdFor = (course) => (course ? `c${course.id}` : "general");
 
+/* ---------- resizable columns ----------
+   Widths persist per browser (canvas:cols). Drag the seam; double-click
+   resets that column to its default. */
+const COL_DEFAULTS = { courses: 240, convs: 215, panel: 380 };
+const COL_LIMITS = { courses: [150, 520], convs: [140, 480], panel: [240, 760] };
+
+function Resizer({ onStart, onDrag, onReset }) {
+  const [active, setActive] = useState(false);
+  const start = (e) => {
+    e.preventDefault();
+    const w0 = onStart();
+    const x0 = e.clientX;
+    setActive(true);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const move = (ev) => onDrag(w0, ev.clientX - x0);
+    const up = () => {
+      setActive(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+  return (
+    <div className="col-resizer" onMouseDown={start} onDoubleClick={onReset}
+      title="Drag to resize · double-click to reset"
+      style={{ background: active ? C.accent : undefined }} />
+  );
+}
+
 /* ---------- course display labels ----------
    Names are "Quantum Computing-L1" / "Quantum Computing-R1": the base
    truncation collides, so colliding labels get their section kind appended
@@ -196,6 +229,31 @@ export default function Home() {
     setModel(m);
     localStorage.setItem("canvas:model", m);
   };
+
+  const [cols, setCols] = useState(COL_DEFAULTS);
+  const colsRef = useRef(cols);
+  colsRef.current = cols;
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("canvas:cols"));
+      if (saved) setCols({ ...COL_DEFAULTS, ...saved });
+    } catch {}
+  }, []);
+  const setCol = (k, w) => {
+    const [lo, hi] = COL_LIMITS[k];
+    const v = Math.round(Math.max(lo, Math.min(hi, w)));
+    setCols((prev) => {
+      const next = { ...prev, [k]: v };
+      try { localStorage.setItem("canvas:cols", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  // dir = -1 for a column whose seam is on its LEFT (dragging left widens it)
+  const resizer = (k, dir = 1) => (
+    <Resizer onStart={() => colsRef.current[k]}
+             onDrag={(w0, dx) => setCol(k, w0 + dir * dx)}
+             onReset={() => setCol(k, COL_DEFAULTS[k])} />
+  );
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -478,7 +536,7 @@ export default function Home() {
   return (
     <div style={{ display: "flex", height: "100vh", background: C.bg, color: C.text }}>
       {/* courses sidebar */}
-      <div style={{ width: 240, borderRight: `1px solid ${C.border}`, padding: 12, overflowY: "auto", flexShrink: 0 }}>
+      <div style={{ width: cols.courses, borderRight: `1px solid ${C.border}`, padding: 12, overflowY: "auto", flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 15, margin: "4px 0 14px 4px" }}>
           Canvas <span style={{ color: C.accent }}>Coach</span>
         </div>
@@ -493,9 +551,10 @@ export default function Home() {
           sideItem(c.id, c.label, course?.id === c.id, () => setCourse(c), true))}
         {courseError && <div style={{ color: C.warn, fontSize: 12, marginTop: 10 }}>courses failed: {courseError}</div>}
       </div>
+      {resizer("courses")}
 
       {/* conversations column */}
-      <div style={{ width: 215, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div style={{ width: cols.convs, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
         <div style={{ padding: 10 }}>
           <button onClick={newConversation} style={{
             width: "100%", background: C.panelSoft, color: C.text, border: `1px solid ${C.border}`,
@@ -531,6 +590,7 @@ export default function Home() {
           ))}
         </div>
       </div>
+      {resizer("convs")}
 
       {/* main */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
@@ -630,8 +690,9 @@ export default function Home() {
           </div>
 
           {/* memory / plan panel */}
-          {panelTab && (
-            <div style={{ width: 380, borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+          {panelTab && (<>
+            {resizer("panel", -1)}
+            <div style={{ width: cols.panel, borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
               <div style={{ padding: "8px 12px", fontSize: 12, color: C.dim, display: "flex", alignItems: "center" }}>
                 <span style={{ flex: 1 }}>{space}/{panelTab}.md</span>
                 {panelDirty && <button onClick={savePanel} style={{ background: C.ok, color: "#111", border: 0, borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontSize: 12 }}>save</button>}
@@ -640,7 +701,7 @@ export default function Home() {
                 onChange={(e) => { setPanelText(e.target.value); setPanelDirty(true); }}
                 style={{ flex: 1, background: C.panel, color: C.text, border: 0, outline: "none", padding: 12, fontSize: 13, fontFamily: "Consolas, monospace", resize: "none" }} />
             </div>
-          )}
+          </>)}
         </div>
 
         {/* input */}

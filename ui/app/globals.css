@@ -93,3 +93,10 @@
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #2c343f; border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* draggable seams between columns */
+.col-resizer {
+  width: 7px; margin: 0 -3px; flex-shrink: 0; z-index: 2;
+  cursor: col-resize; background: transparent; transition: background 120ms;
+}
+.col-resizer:hover { background: #2c343f; }
