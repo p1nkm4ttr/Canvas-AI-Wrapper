@@ -51,8 +51,9 @@ ui/        Next.js chat UI on 127.0.0.1:3117 · spawns `claude -p`
            per message (stream-json over SSE) · calendar feed at
            /api/calendar.ics, re-served to the phone by feed-proxy.mjs
            on LAN port 3118 (the UI itself is loopback-only)
-spaces/    per-course working dirs: memory, plans, dropped files
-           (personal data — gitignored)
+~/CanvasCoach/spaces/   per-course working dirs: memory, plans, dropped
+           files, extracted figures (personal data; outside the repo on
+           purpose — override with CANVAS_SPACES_DIR)
 ```
 
 Canvas-authored text is fenced as untrusted content before it reaches the
@@ -109,6 +110,9 @@ directory to target a USB/synced folder.
 - The UI binds to 127.0.0.1. The only thing on the LAN is `feed-proxy.mjs`,
   which forwards one GET path (the calendar) to the UI and 404s everything
   else. Nobody on the Wi-Fi can reach the chat, uploads, or memory files.
+- Spaces live outside the repository (`~/CanvasCoach/spaces`), so the
+  coach's working directory has no `CLAUDE.md` above it and no project
+  tree beside it.
 - `claude -p` runs with its file tools confined by permission rules to the
   course's space folder plus the shared figure store, with explicit denies
   on the files Claude Code reads as instructions or settings (`CLAUDE.md`,

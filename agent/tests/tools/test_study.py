@@ -285,6 +285,7 @@ def fake_spaces(tmp_path, monkeypatch):
     root = tmp_path / "agent"
     root.mkdir()
     monkeypatch.setattr(config_module, "REPO_ROOT", root)
+    monkeypatch.setenv("CANVAS_SPACES_DIR", str(tmp_path / "spaces"))
     spaces = tmp_path / "spaces"
     (spaces / "c1").mkdir(parents=True)
     (spaces / "c2").mkdir()

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { PROJECT_ROOT } from "../../../lib/spaces";
+import { SPACES_DIR } from "../../../lib/spaces";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ const TYPES = {
 export async function GET(req) {
   const url = new URL(req.url);
   const rel = url.searchParams.get("p") || "";
-  const root = path.resolve(PROJECT_ROOT, "spaces");
+  const root = SPACES_DIR;
   const target = path.resolve(root, rel);
   if (!target.startsWith(root + path.sep) || !fs.existsSync(target) || !fs.statSync(target).isFile()) {
     return new Response("not found", { status: 404 });

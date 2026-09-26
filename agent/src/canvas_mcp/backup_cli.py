@@ -25,7 +25,8 @@ from .core.db import db_path
 
 
 def _spaces_root() -> Path:
-    return (config.REPO_ROOT.parent / "spaces").resolve()
+    from .core.local_files import spaces_root
+    return spaces_root()
 
 
 def _default_dest() -> Path:

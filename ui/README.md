@@ -17,7 +17,7 @@ code. macOS scheduling lives in `launchd/`.
 ## How it's put together
 
 - **Course spaces**: every course (plus "General") is a space — a directory
-  under `../spaces/<id>/` that is the working directory of the spawned
+  under `~/CanvasCoach/spaces/<id>/` (or `CANVAS_SPACES_DIR`) that is the working directory of the spawned
   `claude -p`. Conversations resume per space via `--resume <session_id>`.
 - **Memory / planning**: each space holds `memory.md` and `plan.md`. The
   coach (see `coach.md`) reads and updates them with its file tools; the UI
@@ -49,7 +49,7 @@ instruction/settings files are denied. Change those two lists together.
 
 ## Notes
 
-- `../spaces/` is personal data (memory, plans, dropped files) and is not
-  under version control anywhere.
+- The spaces folder is personal data (memory, plans, dropped files) and
+  lives outside the repository; it is not under version control anywhere.
 - The MCP config (`canvas-mcp.local.json`) is generated at runtime with the
   resolved server path — machine-specific, gitignored.

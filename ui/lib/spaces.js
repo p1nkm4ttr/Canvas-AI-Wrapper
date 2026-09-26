@@ -5,7 +5,14 @@ import { execFileSync, spawn } from "child_process";
 
 // ui/ lives next to agent/ inside the project root.
 export const PROJECT_ROOT = path.resolve(process.cwd(), "..");
-export const SPACES_DIR = path.join(PROJECT_ROOT, "spaces");
+// Per-course spaces live OUTSIDE the repository: CANVAS_SPACES_DIR, else
+// ~/CanvasCoach/spaces. A space is the cwd of the spawned `claude -p`, and
+// Claude Code loads every CLAUDE.md above its cwd as instructions — inside
+// the repo that fed the coach the developer brief on every message. The
+// Python side (core/local_files.py spaces_root) resolves the same path.
+export const SPACES_DIR = path.resolve(
+  process.env.CANVAS_SPACES_DIR || path.join(os.homedir(), "CanvasCoach", "spaces")
+);
 // Extracted figures live here (spaces/.figures/<source>/), shared by every
 // space. The chat route passes it as an extra working directory so the coach
 // can Read (view) figures without a Read rule reaching outside its space.

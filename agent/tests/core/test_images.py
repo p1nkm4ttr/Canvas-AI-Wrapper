@@ -46,6 +46,7 @@ def fake_root(tmp_path, monkeypatch):
     root = tmp_path / "agent"
     root.mkdir()
     monkeypatch.setattr(config_module, "REPO_ROOT", root)
+    monkeypatch.setenv("CANVAS_SPACES_DIR", str(tmp_path / "spaces"))
     (tmp_path / "spaces" / "c1").mkdir(parents=True)
     yield tmp_path
 

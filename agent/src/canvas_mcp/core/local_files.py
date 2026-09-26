@@ -5,10 +5,10 @@ fed into the shared FTS index, so search_course_content covers a dropped
 Simple Syllabus PDF exactly like Canvas material.
 """
 
+import os
 from pathlib import Path
 from typing import Any
 
-from . import config
 from .db import get_local_text_row, put_local_text
 from .extract import extract_text, is_extractable
 
@@ -17,8 +17,16 @@ RESERVED_NAMES = {"memory.md", "plan.md", "system.md"}
 
 
 def spaces_root() -> Path:
-    # Attribute lookup at call time so tests can repoint config.REPO_ROOT.
-    return (config.REPO_ROOT.parent / "spaces").resolve()
+    """Where the per-course spaces live: CANVAS_SPACES_DIR, else
+    ~/CanvasCoach/spaces. Deliberately OUTSIDE the repository: the coach's
+    `claude -p` runs with a space as its cwd, and Claude Code loads every
+    CLAUDE.md in the cwd's ancestors as instructions — inside the repo that
+    handed the coach the developer brief on every message, and let its file
+    tools see the project tree. The UI resolves the same path (lib/spaces.js);
+    keep the two in step."""
+    override = os.getenv("CANVAS_SPACES_DIR")
+    base = Path(override) if override else Path.home() / "CanvasCoach" / "spaces"
+    return base.expanduser().resolve()
 
 
 def course_id_for_space(space_name: str) -> int | None:

@@ -16,6 +16,7 @@ from ..core.client import absolute_url, make_canvas_request
 from ..core.clock import local_date_of
 from ..core.db import extraction_coverage, search_file_text
 from ..core.files import get_file_text_cached
+from ..core.local_files import spaces_root as _spaces_root
 from ..core.modules import fetch_modules_with_items
 from ..core.text import strip_html_tags
 from ..core.untrusted_content import fence_untrusted, fence_untrusted_inline
@@ -465,9 +466,8 @@ def register_study_tools(mcp: FastMCP) -> None:
         """
         from pathlib import Path
 
-        from ..core.config import REPO_ROOT
 
-        spaces_root = (REPO_ROOT.parent / "spaces").resolve()
+        spaces_root = _spaces_root()
         if not spaces_root.is_dir():
             return {"error": f"No spaces folder at {spaces_root}."}
 
