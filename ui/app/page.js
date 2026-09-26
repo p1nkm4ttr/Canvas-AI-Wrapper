@@ -248,6 +248,31 @@ export default function Home() {
       return next;
     });
   };
+  /* Sidebar (courses + chats) can be hidden to give the chat the room.
+     Below NARROW px (a split-screen window) the sidebar is hidden by
+     default and opens as a drawer over the chat; the memory/plan panel
+     overlays the chat instead of squeezing it. */
+  const NARROW = 1000;
+  const [showSide, setShowSide] = useState(true);
+  const [narrow, setNarrow] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  useEffect(() => {
+    try { if (localStorage.getItem("canvas:side") === "0") setShowSide(false); } catch {}
+    const mq = window.matchMedia(`(max-width: ${NARROW}px)`);
+    const apply = () => setNarrow(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  const toggleSide = () => {
+    if (narrow) { setDrawerOpen((o) => !o); return; }
+    setShowSide((v) => {
+      try { localStorage.setItem("canvas:side", v ? "0" : "1"); } catch {}
+      return !v;
+    });
+  };
+  const sideVisible = narrow ? drawerOpen : showSide;
+
   // dir = -1 for a column whose seam is on its LEFT (dragging left widens it)
   const resizer = (k, dir = 1) => (
     <Resizer onStart={() => colsRef.current[k]}
@@ -533,8 +558,19 @@ export default function Home() {
 
   const sorted = [...convs.list].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
+  useEffect(() => { setDrawerOpen(false); }, [space, convs.activeId]);
+
   return (
-    <div style={{ display: "flex", height: "100vh", background: C.bg, color: C.text }}>
+    <div style={{ display: "flex", height: "100vh", background: C.bg, color: C.text, position: "relative" }}>
+      {narrow && drawerOpen && (
+        <div onClick={() => setDrawerOpen(false)}
+             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 19 }} />
+      )}
+      {sideVisible && (
+      <div style={narrow
+        ? { position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 20, display: "flex", background: C.bg,
+            boxShadow: "8px 0 24px rgba(0,0,0,0.5)", maxWidth: "92vw" }
+        : { display: "flex", flexShrink: 0 }}>
       {/* courses sidebar */}
       <div style={{ width: cols.courses, borderRight: `1px solid ${C.border}`, padding: 12, overflowY: "auto", flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 15, margin: "4px 0 14px 4px" }}>
@@ -551,7 +587,7 @@ export default function Home() {
           sideItem(c.id, c.label, course?.id === c.id, () => setCourse(c), true))}
         {courseError && <div style={{ color: C.warn, fontSize: 12, marginTop: 10 }}>courses failed: {courseError}</div>}
       </div>
-      {resizer("courses")}
+      {!narrow && resizer("courses")}
 
       {/* conversations column */}
       <div style={{ width: cols.convs, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
@@ -590,12 +626,17 @@ export default function Home() {
           ))}
         </div>
       </div>
-      {resizer("convs")}
+      {!narrow && resizer("convs")}
+      </div>
+      )}
 
       {/* main */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <div style={{ padding: "10px 18px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontWeight: 600, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={toggleSide} title={sideVisible ? "Hide sidebar" : "Show sidebar"}
+            style={{ background: sideVisible ? C.panelSoft : C.tool, color: C.text, border: `1px solid ${C.border}`,
+                     borderRadius: 6, padding: "4px 9px", fontSize: 14, cursor: "pointer", lineHeight: 1 }}>☰</button>
+          <div style={{ fontWeight: 600, flex: 1, minWidth: 120, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {course ? (course.label || course.name.split("-")[0]) : "General"}
             {activeConv && <span style={{ color: C.dim, fontWeight: 400 }}> · {activeConv.title}</span>}
             {activeConv?.sessionId && <span style={{ color: C.dim, fontWeight: 400, fontSize: 12 }}> · session continues</span>}
@@ -630,7 +671,7 @@ export default function Home() {
           </button>
         </div>
 
-        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
           {/* messages */}
           <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "18px 0" }}>
             <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 22px" }}>
@@ -691,8 +732,11 @@ export default function Home() {
 
           {/* memory / plan panel */}
           {panelTab && (<>
-            {resizer("panel", -1)}
-            <div style={{ width: cols.panel, borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+            {!narrow && resizer("panel", -1)}
+            <div style={narrow
+              ? { position: "absolute", top: 0, right: 0, bottom: 0, width: "min(100%, 440px)", zIndex: 10, background: C.bg,
+                  borderLeft: `1px solid ${C.border}`, boxShadow: "-8px 0 24px rgba(0,0,0,0.5)", display: "flex", flexDirection: "column" }
+              : { width: cols.panel, borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
               <div style={{ padding: "8px 12px", fontSize: 12, color: C.dim, display: "flex", alignItems: "center" }}>
                 <span style={{ flex: 1 }}>{space}/{panelTab}.md</span>
                 {panelDirty && <button onClick={savePanel} style={{ background: C.ok, color: "#111", border: 0, borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontSize: 12 }}>save</button>}
