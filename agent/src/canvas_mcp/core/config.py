@@ -181,7 +181,7 @@ class Config:
         # host, so CANVAS_HOST=https://your-school.instructure.com is sufficient.
         self.canvas_api_token = (
             os.getenv("CANVAS_TOKEN") or os.getenv("CANVAS_API_TOKEN", "")
-        )
+        ).strip()
         # Keep the configured (pre-normalization) value so validate_config()
         # can report the normalization delta from the same read that produced
         # canvas_api_url. Whitespace-trimmed, matching the normalizer's input.
@@ -281,6 +281,12 @@ def validate_config() -> bool:
     if not config.canvas_api_token:
         log_error("CANVAS_TOKEN environment variable is required")
         log_error("Please set CANVAS_TOKEN in your .env file")
+        return False
+
+    if not config.canvas_api_token.isprintable():
+        # A stray control character would make the header invalid, and the
+        # HTTP layer's error would print the token. Refuse up front.
+        log_error("CANVAS_TOKEN contains control or non-printable characters; re-paste it in .env")
         return False
 
     if not config.canvas_api_url:

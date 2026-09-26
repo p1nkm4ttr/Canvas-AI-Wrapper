@@ -39,9 +39,15 @@ def summarize_groups(groups: list[dict]) -> dict[str, Any]:
         graded: list[dict[str, Any]] = []
         ungraded: list[dict[str, Any]] = []
         earned = possible = 0.0
+        omitted = 0
 
         for a in g.get("assignments") or []:
             points = a.get("points_possible")
+            if a.get("omit_from_final_grade"):
+                # Instructor excluded it from the grade (practice, diagnostic).
+                # Counting it drags the standing down for nothing.
+                omitted += 1
+                continue
             sub = a.get("submission") or {}
             if sub.get("excused"):
                 continue
@@ -80,6 +86,7 @@ def summarize_groups(groups: list[dict]) -> dict[str, Any]:
             "groupPercent": pct,
             "graded": graded,
             "ungraded": ungraded,
+            **({"omittedFromFinal": omitted} if omitted else {}),
         })
 
     if weighted:

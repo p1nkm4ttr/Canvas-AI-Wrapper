@@ -457,7 +457,9 @@ async def make_canvas_request(
                     # Audit: log request exception (type only — message may contain PII)
                     log_data_access(method, endpoint, "error", type(e).__name__)
 
-                    return _ret({"error": f"Request failed: {str(e)}"})
+                    # Type only: transport exceptions can echo request headers
+                    # (an invalid Authorization value prints the token).
+                    return _ret({"error": f"Request failed: {type(e).__name__}"})
 
             # Should never reach here, but just in case
             return _ret({"error": "Max retries exceeded"})

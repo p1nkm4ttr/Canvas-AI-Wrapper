@@ -12,5 +12,7 @@ if [ "$1" = "--build" ] || [ ! -f ".next/BUILD_ID" ]; then
     exit 1
   fi
 fi
+trap 'kill 0' EXIT
+node feed-proxy.mjs &   # the phone's calendar feed, the only thing on the LAN
 ( sleep 4; open http://localhost:3117 ) &
 npm start

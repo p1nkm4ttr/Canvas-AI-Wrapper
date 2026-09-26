@@ -27,6 +27,7 @@ async def run(force: bool = False) -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     tz = local_tz()
     today = datetime.now(tz).date()
+    failures: list[str] = []  # sections that could not be fetched; never an all-clear
 
     if not force:
         from .core.db import recent_briefs
@@ -40,6 +41,7 @@ async def run(force: bool = False) -> int:
     )
     if isinstance(active, dict):
         print(f"courses unavailable: {active.get('error')}", file=sys.stderr)
+        failures.append(f"courses: {active.get('error')}")
         active = []
     names = {c["id"]: (c.get("name") or "?").split("-")[0] for c in active if c.get("id")}
 
@@ -59,6 +61,8 @@ async def run(force: bool = False) -> int:
     # 2. Deadlines over the next 7 days.
     start = datetime.now(timezone.utc)
     agenda = await collect_agenda(start, start + timedelta(days=7))
+    if isinstance(agenda, dict):
+        failures.append(f"agenda: {agenda.get('error')}")
     deadlines = [
         a for a in (agenda if isinstance(agenda, list) else [])
         if a.get("type") != "announcement" and a.get("status") not in ("submitted", "graded")
@@ -77,6 +81,9 @@ async def run(force: bool = False) -> int:
         )
         if isinstance(batch, list):
             announcements.extend(batch)
+        else:
+            err = batch.get("error") if isinstance(batch, dict) else "unknown error"
+            failures.append(f"announcements for {len(chunk)} course(s): {err}")
 
     # 4. Reviews due today.
     review_counts = count_due_retrieval_items()
@@ -92,6 +99,8 @@ async def run(force: bool = False) -> int:
         parts.append(f"{len(new_material)} new file{'s' * (len(new_material) != 1)}")
     if reviews_total:
         parts.append(f"{reviews_total} review{'s' * (reviews_total != 1)} due")
+    if failures:
+        parts.append(f"{len(failures)} fetch failure{'s' * (len(failures) != 1)}")
     summary = " · ".join(parts) if parts else "all quiet"
 
     lines: list[str] = []
@@ -112,13 +121,17 @@ async def run(force: bool = False) -> int:
         lines.extend(f"  {m}" for m in new_material[:8])
     if reviews_total:
         lines.append("REVIEWS DUE: " + ", ".join(f"{c}: {n}" for c, n in review_counts.items()))
+    if failures:
+        lines.append("FETCH FAILED (brief incomplete — not an all-clear):")
+        lines.extend(f"  {f}" for f in failures)
     if not lines:
         lines.append("Nothing new overnight and nothing due this week.")
 
     details = "\n".join(lines)
     upsert_brief(today.isoformat(), summary, details)
     print(f"Canvas brief for {today}: {summary}\n\n{details}")
-    return 0
+    # Non-zero so the scheduler's "last run result" shows the gap.
+    return 1 if failures else 0
 
 
 def main() -> None:

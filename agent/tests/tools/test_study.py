@@ -86,7 +86,7 @@ async def test_study_context_walks_module_and_extracts(resolve_ok):
         assert endpoint.endswith("/pages/notes-week-3")
         return {"body": "<p>Amortized analysis</p>"}
 
-    with patch("canvas_mcp.tools.study.fetch_all_paginated_results",
+    with patch("canvas_mcp.tools.study.fetch_modules_with_items",
                new=AsyncMock(return_value=MODULES)), \
          patch("canvas_mcp.tools.study.get_file_text_cached",
                new=AsyncMock(return_value=file_result)), \
@@ -106,7 +106,7 @@ async def test_study_context_walks_module_and_extracts(resolve_ok):
 
 
 async def test_study_context_resolves_quiz_to_its_module(resolve_ok):
-    with patch("canvas_mcp.tools.study.fetch_all_paginated_results",
+    with patch("canvas_mcp.tools.study.fetch_modules_with_items",
                new=AsyncMock(return_value=MODULES)), \
          patch("canvas_mcp.tools.study.get_file_text_cached",
                new=AsyncMock(return_value={"fileId": 500, "name": "Queues.pdf",
@@ -119,7 +119,7 @@ async def test_study_context_resolves_quiz_to_its_module(resolve_ok):
 
 
 async def test_study_context_resolves_date_to_nearest_module(resolve_ok):
-    with patch("canvas_mcp.tools.study.fetch_all_paginated_results",
+    with patch("canvas_mcp.tools.study.fetch_modules_with_items",
                new=AsyncMock(return_value=MODULES)), \
          patch("canvas_mcp.tools.study.make_canvas_request",
                new=AsyncMock(return_value={"body": ""})):
@@ -130,7 +130,7 @@ async def test_study_context_resolves_date_to_nearest_module(resolve_ok):
 async def test_study_context_reports_skipped_files_honestly(resolve_ok):
     scanned = {"fileId": 500, "name": "Queues.pdf", "status": "scanned",
                "text": "", "note": "likely a scan", "url": "/files/500"}
-    with patch("canvas_mcp.tools.study.fetch_all_paginated_results",
+    with patch("canvas_mcp.tools.study.fetch_modules_with_items",
                new=AsyncMock(return_value=MODULES)), \
          patch("canvas_mcp.tools.study.get_file_text_cached",
                new=AsyncMock(return_value=scanned)), \
@@ -142,7 +142,7 @@ async def test_study_context_reports_skipped_files_honestly(resolve_ok):
 
 
 async def test_study_context_unknown_module(resolve_ok):
-    with patch("canvas_mcp.tools.study.fetch_all_paginated_results",
+    with patch("canvas_mcp.tools.study.fetch_modules_with_items",
                new=AsyncMock(return_value=MODULES)):
         result = await get_tool("get_study_context")("ds", module_id=999)
     assert "error" in result

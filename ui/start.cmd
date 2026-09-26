@@ -16,5 +16,7 @@ if errorlevel 1 (
   exit /b 1
 )
 :serve
+rem The phone's calendar feed: the only thing served on the LAN (port 3118).
+start /b node feed-proxy.mjs
 start /b cmd /c "timeout /t 4 >nul & start http://localhost:3117"
 call npm start

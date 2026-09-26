@@ -6,8 +6,11 @@ student by putting the `embed` URL in a markdown image tag.
 """
 
 import hashlib
+import ipaddress
+import socket
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from fastmcp import FastMCP
@@ -22,6 +25,7 @@ from ..core.images import (
     save_figures,
 )
 from ..core.local_files import spaces_root
+from ..core.untrusted_content import fence_untrusted_inline
 from ..core.validation import validate_params
 
 
@@ -73,6 +77,66 @@ _HOW_TO_USE = (
 )
 
 
+def _public_host_error(host: str) -> str | None:
+    """SSRF guard. The model supplies the URL, so it must not be able to aim
+    this server at localhost, the LAN, or cloud metadata. Every address the
+    name resolves to must be public."""
+    if not host:
+        return "URL has no host."
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return f"{host} does not resolve."
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if not ip.is_global:
+            return f"{host} resolves to a non-public address; refusing to fetch it."
+    return None
+
+
+async def _download_public_image(url: str, max_hops: int = 5):
+    """Redirects are followed by hand so EVERY hop is re-validated (a public
+    host redirecting to 127.0.0.1 is the classic bypass), and the body is
+    streamed so the size cap bounds what is downloaded, not just what is kept.
+    Returns (bytes, final_url, ext, error)."""
+    current = url
+    async with httpx.AsyncClient(follow_redirects=False, timeout=60) as client:
+        for _ in range(max_hops):
+            parsed = urlparse(current)
+            if parsed.scheme not in ("http", "https"):
+                return None, current, None, "url must be http(s)."
+            err = _public_host_error(parsed.hostname or "")
+            if err:
+                return None, current, None, err
+            try:
+                async with client.stream("GET", current) as resp:
+                    if resp.is_redirect:
+                        nxt = resp.next_request
+                        if nxt is None:
+                            return None, current, None, "Redirect without a target."
+                        current = str(nxt.url)
+                        continue
+                    resp.raise_for_status()
+                    content_type = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
+                    ext = _CT_EXT.get(content_type)
+                    if ext is None:
+                        return None, current, None, f"Not an image (content-type: {content_type or 'unknown'})."
+                    buf = bytearray()
+                    async for chunk in resp.aiter_bytes():
+                        buf.extend(chunk)
+                        if len(buf) > MAX_WEB_IMAGE_BYTES:
+                            return None, current, None, (
+                                f"Image too large (over {MAX_WEB_IMAGE_BYTES // (1024 * 1024)} MB)."
+                            )
+                    return bytes(buf), current, ext, None
+            except Exception as e:
+                return None, current, None, f"Fetch failed: {type(e).__name__}: {e}"
+    return None, current, None, "Too many redirects."
+
+
 def register_image_tools(mcp: FastMCP) -> None:
     """Register the figure tools."""
 
@@ -118,13 +182,13 @@ def register_image_tools(mcp: FastMCP) -> None:
             data, name, max_images=max_images, first=first, last=last
         )
         if "error" in result:
-            return {"file": name, "images": [], "count": 0, "note": result["error"]}
+            return {"file": fence_untrusted_inline(name, "file name"), "images": [], "count": 0, "note": result["error"]}
 
         unit = result["unit"]
         scanned = f"{unit}s {result['scannedFrom']}-{result['scannedTo']} of {result['total']}"
         if not result["images"]:
             return {
-                "file": name, "images": [], "count": 0, "scanned": scanned,
+                "file": fence_untrusted_inline(name, "file name"), "images": [], "count": 0, "scanned": scanned,
                 "note": (
                     f"No substantial EMBEDDED images in {scanned}. Textbook "
                     f"figures are usually vector line-art, invisible to this "
@@ -134,7 +198,7 @@ def register_image_tools(mcp: FastMCP) -> None:
             }
         saved = save_figures(source_key, result["images"])
         out = {
-            "file": name,
+            "file": fence_untrusted_inline(name, "file name"),
             "images": saved,
             "count": len(saved),
             "scanned": scanned,
@@ -181,11 +245,11 @@ def register_image_tools(mcp: FastMCP) -> None:
 
         result = render_pdf_pages(data, first, last)
         if "error" in result:
-            return {"file": name, "images": [], "count": 0, "note": result["error"]}
+            return {"file": fence_untrusted_inline(name, "file name"), "images": [], "count": 0, "note": result["error"]}
 
         saved = save_figures(f"{source_key}-pages", result["images"])
         out = {
-            "file": name,
+            "file": fence_untrusted_inline(name, "file name"),
             "images": saved,
             "count": len(saved),
             "scanned": f"pages {result['scannedFrom']}-{result['scannedTo']} of {result['total']}",
@@ -258,23 +322,13 @@ def register_image_tools(mcp: FastMCP) -> None:
         Args:
             url: Direct http(s) URL of the image itself.
         """
-        if not url.startswith(("http://", "https://")):
-            return {"error": "url must be http(s)."}
-        try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=60) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
-        except Exception as e:
-            return {"error": f"Fetch failed: {type(e).__name__}: {e}"}
-
-        content_type = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
-        ext = _CT_EXT.get(content_type)
-        if ext is None:
-            return {"error": f"Not an image (content-type: {content_type or 'unknown'})."}
-        if len(resp.content) > MAX_WEB_IMAGE_BYTES:
-            return {"error": f"Image too large ({len(resp.content) / 1e6:.0f} MB)."}
+        data, final_url, ext, err = await _download_public_image(url)
+        if err:
+            return {"error": err}
 
         digest = hashlib.md5(url.encode()).hexdigest()[:16]
-        saved = save_figures("web", [(f"{digest}{ext}", resp.content)])
+        saved = save_figures("web", [(f"{digest}{ext}", data)])
         result: dict[str, Any] = {**saved[0], "sourceUrl": url, "note": _HOW_TO_USE}
+        if final_url != url:
+            result["fetchedFrom"] = final_url
         return result

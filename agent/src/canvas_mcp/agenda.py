@@ -9,9 +9,9 @@ import argparse
 import asyncio
 import sys
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 from .core.client import absolute_url, cleanup_http_client, fetch_all_paginated_results
+from .core.clock import local_tz as local_tz  # re-exported: callers import it from here
 from .core.config import get_config, validate_config
 
 
@@ -35,12 +35,22 @@ def derive_status(item: dict) -> str:
     return "todo"
 
 
-def local_tz() -> ZoneInfo | timezone:
-    name = get_config().timezone or "UTC"
-    try:
-        return ZoneInfo(name)
-    except Exception:
-        return timezone.utc
+def status_from_submission(sub: object) -> str:
+    """derive_status for a Submission OBJECT (assignment include[]=submission).
+
+    That shape carries workflow_state / submitted_at, not the planner feed's
+    graded / submitted booleans; feeding it to derive_status raw made every
+    graded assignment read as "todo".
+    """
+    if not isinstance(sub, dict):
+        return "-"
+    return derive_status({"submissions": {
+        "excused": sub.get("excused"),
+        "missing": sub.get("missing"),
+        "late": sub.get("late"),
+        "graded": sub.get("workflow_state") == "graded",
+        "submitted": bool(sub.get("submitted_at")),
+    }})
 
 
 async def collect_agenda(

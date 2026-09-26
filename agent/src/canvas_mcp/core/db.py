@@ -344,9 +344,11 @@ def add_retrieval_item(
 ) -> int:
     """Log a practice item the student should see again. Starts in box 1,
     due tomorrow unless first_due overrides."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
-    due = first_due or (date.today() + timedelta(days=1)).isoformat()
+    from .clock import local_today
+
+    due = first_due or (local_today() + timedelta(days=1)).isoformat()
     cur = get_conn().execute(
         "INSERT INTO retrieval_items (course, question, answer, source, due_date, created_at) "
         "VALUES (?, ?, ?, ?, ?, ?)",
@@ -360,9 +362,9 @@ def due_retrieval_items(
     course: str | None = None, on_or_before: str | None = None, limit: int = 20
 ) -> list[dict[str, Any]]:
     """Items due for review (oldest due first), never retired ones."""
-    from datetime import date
+    from .clock import local_today
 
-    cutoff = on_or_before or date.today().isoformat()
+    cutoff = on_or_before or local_today().isoformat()
     sql = (
         "SELECT id, course, question, answer, source, box, due_date, reviews "
         "FROM retrieval_items WHERE retired = 0 AND due_date <= ? "
@@ -383,9 +385,9 @@ def due_retrieval_items(
 
 def count_due_retrieval_items(on_or_before: str | None = None) -> dict[str, int]:
     """Due-review counts per course (for the daily brief)."""
-    from datetime import date
+    from .clock import local_today
 
-    cutoff = on_or_before or date.today().isoformat()
+    cutoff = on_or_before or local_today().isoformat()
     rows = get_conn().execute(
         "SELECT COALESCE(course, 'general'), COUNT(*) FROM retrieval_items "
         "WHERE retired = 0 AND due_date <= ? GROUP BY COALESCE(course, 'general')",
@@ -397,7 +399,9 @@ def count_due_retrieval_items(on_or_before: str | None = None) -> dict[str, int]
 def record_retrieval_result(item_id: int, correct: bool) -> dict[str, Any] | None:
     """Leitner progression: correct climbs a box (retire past box 5),
     wrong resets to box 1 due tomorrow. Returns the new state, None if unknown."""
-    from datetime import date, timedelta
+    from datetime import timedelta
+
+    from .clock import local_today
 
     row = get_conn().execute(
         "SELECT box, reviews FROM retrieval_items WHERE id = ? AND retired = 0",
@@ -417,7 +421,7 @@ def record_retrieval_result(item_id: int, correct: bool) -> dict[str, Any] | Non
         new_box = box + 1
     else:
         new_box = 1
-    due = (date.today() + timedelta(days=LEITNER_INTERVALS[new_box])).isoformat()
+    due = (local_today() + timedelta(days=LEITNER_INTERVALS[new_box])).isoformat()
     get_conn().execute(
         "UPDATE retrieval_items SET box = ?, due_date = ?, reviews = ?, last_result = ? "
         "WHERE id = ?",
@@ -436,9 +440,11 @@ def upsert_brief(date_str: str, summary: str, details: str) -> None:
 
 
 def recent_briefs(days: int = 2) -> list[dict[str, Any]]:
-    from datetime import date, timedelta
+    from datetime import timedelta
 
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    from .clock import local_today
+
+    cutoff = (local_today() - timedelta(days=days)).isoformat()
     rows = get_conn().execute(
         "SELECT date, summary, details FROM briefs WHERE date >= ? ORDER BY date",
         (cutoff,),

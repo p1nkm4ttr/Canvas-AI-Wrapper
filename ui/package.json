@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3117",
+    "dev": "next dev -p 3117 -H 127.0.0.1",
     "build": "next build",
-    "start": "next start -p 3117 -H 0.0.0.0"
+    "start": "next start -p 3117 -H 127.0.0.1",
+    "feed": "node feed-proxy.mjs"
   },
   "dependencies": {
     "katex": "^0.18.4",

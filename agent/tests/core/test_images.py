@@ -147,40 +147,103 @@ async def test_document_images_canvas_error_propagates():
         assert "error" in await get_tool("get_document_images")(file_id=9)
 
 
-async def test_fetch_web_image_saves_png(fake_root):
-    png = _png()
+# ------------------------------------------------------------ fetch_web_image
+# The fetch streams the body and follows redirects by hand; fakes model
+# httpx's client.stream() context manager, one response per hop.
 
-    class FakeResp:
-        headers = {"content-type": "image/png"}
-        content = png
-        def raise_for_status(self): pass
+class _Resp:
+    def __init__(self, content_type, body=b"", redirect_to=None):
+        from types import SimpleNamespace
+        self.headers = {"content-type": content_type}
+        self._body = body
+        self.is_redirect = redirect_to is not None
+        self.next_request = SimpleNamespace(url=redirect_to) if redirect_to else None
+        self.chunks_served = 0
+
+    def raise_for_status(self):
+        pass
+
+    async def aiter_bytes(self):
+        for i in range(0, len(self._body), 4096):
+            self.chunks_served += 1
+            yield self._body[i:i + 4096]
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+
+def _client_for(hops):
+    requested = []
 
     class FakeClient:
-        def __init__(self, **kw): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
-        async def get(self, url): return FakeResp()
+        def __init__(self, **kw):
+            pass
 
-    with patch("canvas_mcp.tools.images.httpx.AsyncClient", FakeClient):
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def stream(self, method, url):
+            requested.append(url)
+            return hops.pop(0)
+
+    return FakeClient, requested
+
+
+async def test_fetch_web_image_saves_png(fake_root):
+    client, _ = _client_for([_Resp("image/png", _png())])
+    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
+         patch("canvas_mcp.tools.images._public_host_error", return_value=None):
         result = await get_tool("fetch_web_image")("https://example.com/fig.png")
     assert result["embed"].startswith("/api/spacefile?p=.figures/web/")
     assert result["sourceUrl"] == "https://example.com/fig.png"
 
 
 async def test_fetch_web_image_rejects_non_image(fake_root):
-    class FakeResp:
-        headers = {"content-type": "text/html"}
-        content = b"<html>"
-        def raise_for_status(self): pass
-
-    class FakeClient:
-        def __init__(self, **kw): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
-        async def get(self, url): return FakeResp()
-
-    with patch("canvas_mcp.tools.images.httpx.AsyncClient", FakeClient):
+    client, _ = _client_for([_Resp("text/html", b"<html>")])
+    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
+         patch("canvas_mcp.tools.images._public_host_error", return_value=None):
         assert "error" in await get_tool("fetch_web_image")("https://example.com/page")
+
+
+async def test_fetch_web_image_refuses_private_hosts_without_connecting(fake_root):
+    client, requested = _client_for([_Resp("image/png", _png())])
+    private = [(None, None, None, None, ("127.0.0.1", 0))]
+    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
+         patch("canvas_mcp.tools.images.socket.getaddrinfo", return_value=private):
+        result = await get_tool("fetch_web_image")("http://internal.example/admin/reset")
+    assert "non-public" in result["error"]
+    assert requested == []  # refused before any request was made
+
+
+async def test_fetch_web_image_revalidates_every_redirect_hop(fake_root):
+    """A public host that 302s to localhost is the classic SSRF bypass."""
+    client, requested = _client_for([_Resp("", redirect_to="http://127.0.0.1:8000/admin/reset")])
+
+    def host_check(host):
+        return None if host == "public.example" else "resolves to a non-public address"
+
+    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
+         patch("canvas_mcp.tools.images._public_host_error", side_effect=host_check):
+        result = await get_tool("fetch_web_image")("http://public.example/image.png")
+    assert "non-public" in result["error"]
+    assert requested == ["http://public.example/image.png"]  # the loopback hop never happened
+
+
+async def test_fetch_web_image_size_cap_stops_the_download(fake_root, monkeypatch):
+    monkeypatch.setattr("canvas_mcp.tools.images.MAX_WEB_IMAGE_BYTES", 10_000)
+    resp = _Resp("image/png", b"x" * 400_000)
+    client, _ = _client_for([resp])
+    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
+         patch("canvas_mcp.tools.images._public_host_error", return_value=None):
+        result = await get_tool("fetch_web_image")("https://example.com/huge.png")
+    assert "too large" in result["error"]
+    assert resp.chunks_served <= 4  # aborted early, not after buffering 400 KB
 
 
 def test_render_pdf_pages_rasterizes_vector_content():

@@ -47,9 +47,10 @@ agent/     Python MCP server (fork of vishalsachdev/canvas-mcp, MIT)
            ~20 tools over stdio · SQLite cache + FTS5 · CLIs:
            canvas-audit, canvas-agenda, canvas-extract, canvas-brief,
            canvas-ics, canvas-backup, canvas-courses
-ui/        Next.js chat UI on localhost:3117 · spawns `claude -p`
-           per message (stream-json over SSE) · serves the calendar
-           feed at /api/calendar.ics
+ui/        Next.js chat UI on 127.0.0.1:3117 · spawns `claude -p`
+           per message (stream-json over SSE) · calendar feed at
+           /api/calendar.ics, re-served to the phone by feed-proxy.mjs
+           on LAN port 3118 (the UI itself is loopback-only)
 spaces/    per-course working dirs: memory, plans, dropped files
            (personal data — gitignored)
 ```
@@ -87,7 +88,7 @@ Then, per platform (all paths relative to the repo root):
 | Chat UI | `cd ui`, `npm install`, then `dev.cmd` (dev) or `start.cmd` (built, faster) | `cd ui`, `npm install`, then `./dev.sh` or `./start.sh` |
 | Claude Desktop | add `agent\.venv\Scripts\canvas-server.exe` as MCP server `canvas` in `%APPDATA%\Claude\claude_desktop_config.json` | add `agent/.venv/bin/canvas-server` as MCP server `canvas` in `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | Daily brief + weekly backup | Task Scheduler: `canvas-brief.exe --force` daily 07:30, `canvas-backup.exe` Sun 20:00, plus an at-logon `canvas-brief.exe` (skips if today's exists) | `ui/launchd/` plists, same times; launchd replays a run missed during sleep on wake, so no at-logon job (see `launchd/README.md`) |
-| Phone calendar | allow inbound TCP 3117 in Windows Firewall (Private profile) | the macOS firewall, if on, prompts once for `node`; allow it |
+| Phone calendar | allow inbound TCP 3118 in Windows Firewall (Private profile) | the macOS firewall, if on, prompts once for `node`; allow it |
 
 macOS gotcha: if the repo lives in an iCloud-synced folder (Desktop or
 Documents), iCloud marks dot-folders hidden and Python then ignores the
@@ -96,11 +97,26 @@ outside iCloud, or create the venv as `venv.nosync` and symlink `.venv` to
 it (`ln -s venv.nosync .venv`). Also keep `canvas.db` out of any synced
 folder; two syncing writers corrupt SQLite.
 
-Either UI launcher opens http://localhost:3117. For the phone, subscribe
-(same Wi-Fi) to `http://<this-machine's-lan-ip>:3117/api/calendar.ics` as a
+Either UI launcher opens http://localhost:3117 and starts the feed proxy.
+For the phone, subscribe (same Wi-Fi) to
+`http://<this-machine's-lan-ip>:3118/api/calendar.ics` as a
 subscribed calendar, choosing "continue without SSL" when iOS asks.
 `canvas-backup` zips the database and spaces (never the token); pass a
 directory to target a USB/synced folder.
+
+## What is exposed, and what the model can touch
+
+- The UI binds to 127.0.0.1. The only thing on the LAN is `feed-proxy.mjs`,
+  which forwards one GET path (the calendar) to the UI and 404s everything
+  else. Nobody on the Wi-Fi can reach the chat, uploads, or memory files.
+- `claude -p` runs with its file tools confined by permission rules to the
+  course's space folder plus the shared figure store, with explicit denies
+  on the files Claude Code reads as instructions or settings (`CLAUDE.md`,
+  `.claude/`, `.mcp.json`). Uploads refuse those names too. Shell is never
+  allowed. Canvas-authored text (bodies, titles, file names, notes) is fenced
+  as untrusted before the model sees it.
+- Web fetches from the model refuse non-public addresses on every redirect
+  hop and stop downloading at the size cap.
 
 ## Honest limitations
 

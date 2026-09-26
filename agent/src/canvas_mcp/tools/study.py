@@ -12,9 +12,11 @@ from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.cache import resolve_course
-from ..core.client import absolute_url, fetch_all_paginated_results, make_canvas_request
+from ..core.client import absolute_url, make_canvas_request
+from ..core.clock import local_date_of
 from ..core.db import extraction_coverage, search_file_text
 from ..core.files import get_file_text_cached
+from ..core.modules import fetch_modules_with_items
 from ..core.text import strip_html_tags
 from ..core.untrusted_content import fence_untrusted, fence_untrusted_inline
 from ..core.validation import validate_params
@@ -80,9 +82,10 @@ def _find_module(
                 due_raw = (item.get("content_details") or {}).get("due_at")
                 if not due_raw:
                     continue
-                try:
-                    due = datetime.fromisoformat(due_raw.replace("Z", "+00:00")).date()
-                except ValueError:
+                # Calendar day in the STUDENT's zone: a 20:00Z deadline is
+                # already the next day east of UTC.
+                due = local_date_of(due_raw)
+                if due is None:
                     continue
                 gap = abs((due - target).days)
                 if best is None or gap < best[0]:
@@ -134,10 +137,7 @@ def register_study_tools(mcp: FastMCP) -> None:
             return resolved
         course_id, course_name = resolved
 
-        modules = await fetch_all_paginated_results(
-            f"/courses/{course_id}/modules",
-            {"include[]": ["items", "content_details"], "per_page": 100},
-        )
+        modules = await fetch_modules_with_items(course_id)
         if _is_err(modules):
             return modules
 
@@ -148,6 +148,8 @@ def register_study_tools(mcp: FastMCP) -> None:
         items_out: list[dict] = []
         extracted = 0
         skipped: list[str] = []
+        if module.get("itemsError"):
+            skipped.append(f"module items could not be loaded: {module['itemsError']}")
 
         for item in module.get("items") or []:
             itype = item.get("type")
@@ -170,7 +172,8 @@ def register_study_tools(mcp: FastMCP) -> None:
                         entry["note"] = f"truncated at {max_chars_per_file} chars; get_file_text for all of it"
                     extracted += 1
                 else:
-                    skipped.append(f"{title} ({file_result['status']}: {file_result['note']})")
+                    # entry["title"] is already fenced; the note fences the file name itself.
+                    skipped.append(f"{entry['title']} ({file_result['status']}: {file_result['note']})")
                     entry["status"] = file_result["status"]
 
             elif itype == "Page" and item.get("page_url"):

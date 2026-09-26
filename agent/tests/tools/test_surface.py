@@ -133,7 +133,7 @@ async def test_assignment_full_shape(resolve_ok, mock_request):
     mock_request.return_value = {
         "name": "HW 3", "due_at": "2026-12-12T18:59:59Z", "points_possible": 10,
         "submission_types": ["online_upload"],
-        "submission": {"submitted": True},
+        "submission": {"workflow_state": "submitted", "submitted_at": "2026-02-01T10:00:00Z"},
         "description": "<p>Solve &amp; submit</p>",
         "html_url": "/courses/4361/assignments/9",
     }
@@ -411,7 +411,8 @@ async def test_course_map_shape(resolve_ok, mock_fetch):
              "html_url": "/courses/4361/modules/items/2"},
         ]},
     ]
-    result = await get_tool("get_course_map")("data struct")
+    with patch("canvas_mcp.core.modules.fetch_all_paginated_results", mock_fetch):
+        result = await get_tool("get_course_map")("data struct")
     assert result["moduleCount"] == 1 and result["itemCount"] == 2
     items = result["modules"][0]["items"]
     assert items[0]["fileId"] == 552

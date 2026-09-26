@@ -1,10 +1,11 @@
 """Tests for spaced-retrieval storage and Leitner progression."""
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 
 from canvas_mcp.core import db
+from canvas_mcp.core.clock import local_today
 
 
 @pytest.fixture(autouse=True)
@@ -16,7 +17,7 @@ def temp_db(tmp_path, monkeypatch):
 
 
 def _today_plus(n):
-    return (date.today() + timedelta(days=n)).isoformat()
+    return (local_today() + timedelta(days=n)).isoformat()
 
 
 def test_new_item_due_tomorrow_box_one():
@@ -27,7 +28,7 @@ def test_new_item_due_tomorrow_box_one():
 
 
 def test_correct_climbs_ladder_and_retires():
-    iid = db.add_retrieval_item("Q", "A", first_due=date.today().isoformat())
+    iid = db.add_retrieval_item("Q", "A", first_due=local_today().isoformat())
     expected = [(True, 2, 3), (True, 3, 7), (True, 4, 14), (True, 5, 30)]
     for correct, box, days in expected:
         state = db.record_retrieval_result(iid, correct)
@@ -41,7 +42,7 @@ def test_correct_climbs_ladder_and_retires():
 
 
 def test_wrong_resets_to_box_one_due_tomorrow():
-    iid = db.add_retrieval_item("Q", "A", first_due=date.today().isoformat())
+    iid = db.add_retrieval_item("Q", "A", first_due=local_today().isoformat())
     db.record_retrieval_result(iid, True)   # box 2
     db.record_retrieval_result(iid, True)   # box 3
     state = db.record_retrieval_result(iid, False)
@@ -50,8 +51,8 @@ def test_wrong_resets_to_box_one_due_tomorrow():
 
 
 def test_course_filter_and_counts():
-    db.add_retrieval_item("q1", "a", "OS", first_due=date.today().isoformat())
-    db.add_retrieval_item("q2", "a", "Nature of Computation", first_due=date.today().isoformat())
+    db.add_retrieval_item("q1", "a", "OS", first_due=local_today().isoformat())
+    db.add_retrieval_item("q2", "a", "Nature of Computation", first_due=local_today().isoformat())
     assert len(db.due_retrieval_items("OS")) == 1
     counts = db.count_due_retrieval_items()
     assert counts["OS"] == 1 and counts["Nature of Computation"] == 1

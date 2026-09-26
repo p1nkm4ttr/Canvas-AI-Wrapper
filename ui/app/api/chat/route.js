@@ -1,7 +1,10 @@
+import fs from "fs";
 import { spawn } from "child_process";
 import {
   ALLOWED_TOOLS,
+  DISALLOWED_TOOLS,
   CLAUDE_EXE,
+  FIGURES_DIR,
   ensureMcpConfig,
   ensureSpace,
   validSpaceId,
@@ -26,11 +29,14 @@ export async function POST(req) {
   }
 
   const { dir, systemFile } = ensureSpace(spaceId, courseName);
+  fs.mkdirSync(FIGURES_DIR, { recursive: true }); // --add-dir needs it to exist
 
   const args = [
     "-p",
     "--mcp-config", ensureMcpConfig(),
     "--allowedTools", ALLOWED_TOOLS,
+    "--disallowedTools", DISALLOWED_TOOLS,
+    "--add-dir", FIGURES_DIR,
     "--append-system-prompt-file", systemFile,
     "--output-format", "stream-json",
     "--verbose",

@@ -39,6 +39,14 @@ code. macOS scheduling lives in `launchd/`.
 3. `-p` starts in Manual permission mode: every needed tool must be in
    `--allowedTools` (see `lib/spaces.js`) or the run blocks forever.
 
+## Network and permissions
+
+`next start` binds to 127.0.0.1; `feed-proxy.mjs` (started by both launchers)
+is the only listener on the LAN and serves nothing but `/api/calendar.ics` on
+port 3118. `lib/spaces.js` holds the allow/deny rules that confine the
+spawned CLI's file tools to the space folder; `--disallowedTools` is where
+instruction/settings files are denied. Change those two lists together.
+
 ## Notes
 
 - `../spaces/` is personal data (memory, plans, dropped files) and is not

@@ -343,19 +343,27 @@ export default function Home() {
   };
 
   /* ---------- panel ---------- */
+  // The panel remembers WHICH space its text came from: a slow load that
+  // lands after switching course must not be shown, and a save must go back
+  // to the space the text belongs to, never the one currently displayed.
+  const panelSpaceRef = useRef(null);
   const openPanel = async (tab) => {
-    const r = await fetch(`/api/space?space=${space}&file=${tab}`);
+    const sp = space;
+    const r = await fetch(`/api/space?space=${sp}&file=${tab}`);
     const d = await r.json();
+    if (spaceRef.current !== sp) return;
+    panelSpaceRef.current = sp;
     setPanelText(d.content ?? "");
     setPanelTab(tab);
     setPanelDirty(false);
   };
 
   const savePanel = async () => {
+    const sp = panelSpaceRef.current || space;
     await fetch("/api/space", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ space, file: panelTab, content: panelText }),
+      body: JSON.stringify({ space: sp, file: panelTab, content: panelText }),
     });
     setPanelDirty(false);
   };

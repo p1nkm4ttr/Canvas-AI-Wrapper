@@ -6,6 +6,10 @@ import { execFileSync, spawn } from "child_process";
 // ui/ lives next to agent/ inside the project root.
 export const PROJECT_ROOT = path.resolve(process.cwd(), "..");
 export const SPACES_DIR = path.join(PROJECT_ROOT, "spaces");
+// Extracted figures live here (spaces/.figures/<source>/), shared by every
+// space. The chat route passes it as an extra working directory so the coach
+// can Read (view) figures without a Read rule reaching outside its space.
+export const FIGURES_DIR = path.join(SPACES_DIR, ".figures");
 // Platform glue. The Python venv puts console scripts in Scripts\*.exe on
 // Windows and bin/* everywhere else; Claude Code installs to ~/.local/bin.
 const WIN = process.platform === "win32";
@@ -142,8 +146,30 @@ export const ALLOWED_TOOLS = [
   "mcp__canvas__record_review_result",
   "WebSearch",
   "WebFetch",
-  "Read",
-  "Write",
-  "Edit",
+  // File tools are confined to the space directory (the CLI's cwd) plus the
+  // shared figure store. cwd alone is NOT containment: a bare Read rule let a
+  // steered model read ../../agent/.env and a bare Write let it rewrite
+  // application code. Claude Code permission rules take path patterns.
+  // NOTE: in Claude Code, Edit rules govern every file-writing tool (Write,
+  // Edit, NotebookEdit); a "Write(...)" rule is not a recognised form and is
+  // silently ignored — measured, not assumed.
+  // Read/Edit patterns are cwd-relative; the shared figure store is granted
+  // separately via --add-dir (see FIGURES_DIR), which needs no path-pattern
+  // syntax and so behaves the same on Windows and macOS.
+  "Read(./**)",
+  "Edit(./**)",
   "Glob",
+].join(",");
+
+// Files Claude Code itself loads as instructions or settings from its cwd.
+// A model that could write these would be granting itself permissions (or
+// new MCP servers) for the next turn. Deny rules win over allow rules.
+export const DISALLOWED_TOOLS = [
+  "Bash",
+  "Edit(./.claude/**)",
+  "Edit(./.mcp.json)",
+  "Edit(./CLAUDE.md)",
+  "Edit(./CLAUDE.local.md)",
+  "Edit(./AGENTS.md)",
+  "Edit(./system.md)",
 ].join(",");

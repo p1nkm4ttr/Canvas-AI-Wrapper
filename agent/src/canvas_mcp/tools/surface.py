@@ -15,9 +15,10 @@ from typing import Any
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..agenda import collect_agenda, derive_status, local_tz
+from ..agenda import collect_agenda, local_tz, status_from_submission
 from ..core.cache import resolve_course
 from ..core.client import absolute_url, fetch_all_paginated_results, make_canvas_request
+from ..core.modules import fetch_modules_with_items, items_coverage_note
 from ..core.syllabus import parse_weights, resolve_syllabus
 from ..core.text import strip_html_tags
 from ..core.untrusted_content import fence_untrusted, fence_untrusted_inline
@@ -189,7 +190,7 @@ def register_surface_tools(mcp: FastMCP) -> None:
             "daysUntil": days_until,
             "points": a.get("points_possible"),
             "submissionTypes": a.get("submission_types") or [],
-            "status": derive_status({"submissions": a.get("submission")}),
+            "status": status_from_submission(a.get("submission")),
             "description": fence_untrusted(
                 strip_html_tags(a.get("description") or "") or "(no description)",
                 "assignment description",
@@ -618,11 +619,10 @@ def register_surface_tools(mcp: FastMCP) -> None:
             return resolved
         course_id, course_name = resolved
 
-        mods = await fetch_all_paginated_results(
-            f"/courses/{course_id}/modules", {"include[]": "items", "per_page": 100}
-        )
+        mods = await fetch_modules_with_items(course_id)
         if _is_err(mods):
             return mods
+        coverage = items_coverage_note(mods)
 
         modules = []
         total_items = 0
@@ -654,6 +654,7 @@ def register_surface_tools(mcp: FastMCP) -> None:
             "moduleCount": len(modules),
             "itemCount": total_items,
             "modules": modules,
+            **({"coverage": coverage} if coverage else {}),
         }
 
     # ------------------------------------------------------------ planner note

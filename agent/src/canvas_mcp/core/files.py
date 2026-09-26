@@ -12,6 +12,7 @@ from .client import make_canvas_request
 from .db import get_file_text_row, put_file_text
 from .extract import MAX_DOWNLOAD_BYTES, extract_text, is_extractable
 from .logging import log_debug, log_error
+from .untrusted_content import fence_untrusted_inline
 
 
 async def _download(url: str, timeout: float = 120.0) -> bytes | None:
@@ -102,7 +103,8 @@ async def get_file_text_cached(file_id: int | str, course_id: int | None = None)
 
     if not is_extractable(name, real_filename, content_type):
         note = (
-            f"'{name}' ({content_type or 'unknown type'}) is not an extractable "
+            f"{fence_untrusted_inline(name, 'file name')} "
+            f"({content_type or 'unknown type'}) is not an extractable "
             "format (slides, docs, and text files are)."
         )
         put_file_text(fid, resolved_course, name, updated_at, "unsupported", "", note)
