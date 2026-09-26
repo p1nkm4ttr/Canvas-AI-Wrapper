@@ -10,7 +10,7 @@ from canvas_mcp.core import db
 @pytest.fixture(autouse=True)
 def temp_db(tmp_path, monkeypatch):
     """Each test gets its own database file."""
-    monkeypatch.setenv("HULMS_DB", str(tmp_path / "test.db"))
+    monkeypatch.setenv("CANVAS_DB", str(tmp_path / "test.db"))
     db.close_conn()
     yield
     db.close_conn()

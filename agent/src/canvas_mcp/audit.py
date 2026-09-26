@@ -1,12 +1,12 @@
 """Corpus audit CLI: what does each (completed) course actually contain?
 
 Usage:
-    hulms-audit                 # every completed course, summary table
-    hulms-audit "Data Struct"   # one course (id, code, or name substring), detailed
-    hulms-audit --fresh         # bypass the SQLite cache
+    canvas-audit                 # every completed course, summary table
+    canvas-audit "Data Struct"   # one course (id, code, or name substring), detailed
+    canvas-audit --fresh         # bypass the SQLite cache
 
 This answers the only question that matters before investing more weekends:
-is Habib's Canvas data good enough to build on — and which course is the one
+is your institution's Canvas data good enough to build on — and which course is the one
 to develop against. Everything is cached to SQLite (7 days) so re-runs are
 free; concluded-course access may be withdrawn, so fetched data is kept.
 """

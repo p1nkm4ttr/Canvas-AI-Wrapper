@@ -43,7 +43,7 @@ def _pptx_with_pictures(*pngs):
 
 @pytest.fixture
 def fake_root(tmp_path, monkeypatch):
-    root = tmp_path / "hulms-agent"
+    root = tmp_path / "agent"
     root.mkdir()
     monkeypatch.setattr(config_module, "REPO_ROOT", root)
     (tmp_path / "spaces" / "c1").mkdir(parents=True)

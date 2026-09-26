@@ -82,10 +82,10 @@ LEITNER_INTERVALS = {1: 1, 2: 3, 3: 7, 4: 14, 5: 30}
 
 
 def db_path() -> str:
-    """Cache file location. HULMS_DB overrides; default hulms.db at the repo
+    """Cache file location. CANVAS_DB overrides; default canvas.db at the repo
     root (NOT the CWD — MCP clients spawn the server from arbitrary dirs)."""
     from .config import REPO_ROOT
-    return os.getenv("HULMS_DB") or str(REPO_ROOT / "hulms.db")
+    return os.getenv("CANVAS_DB") or str(REPO_ROOT / "canvas.db")
 
 
 def get_conn() -> sqlite3.Connection:
@@ -98,7 +98,7 @@ def get_conn() -> sqlite3.Connection:
 
 
 def close_conn() -> None:
-    """Close and forget the connection (tests, or after HULMS_DB changes)."""
+    """Close and forget the connection (tests, or after CANVAS_DB changes)."""
     global _conn
     if _conn is not None:
         _conn.close()

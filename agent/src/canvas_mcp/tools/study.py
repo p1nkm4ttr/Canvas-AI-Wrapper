@@ -266,7 +266,7 @@ def register_study_tools(mcp: FastMCP) -> None:
         """Full-text search over extracted course files. ONLY for questions
         that cross modules ("where was Dijkstra covered?") — when the module
         is known, get_study_context is the right tool. Searches what has been
-        extracted so far; run `hulms-extract <course>` once to index a whole
+        extracted so far; run `canvas-extract <course>` once to index a whole
         course.
 
         Args:
@@ -316,7 +316,7 @@ def register_study_tools(mcp: FastMCP) -> None:
             result["note"] = (
                 "Nothing is indexed yet"
                 + (" for this course" if course_id else "")
-                + ". Run `hulms-extract <course>` or read modules via get_study_context first."
+                + ". Run `canvas-extract <course>` or read modules via get_study_context first."
             )
         return result
 

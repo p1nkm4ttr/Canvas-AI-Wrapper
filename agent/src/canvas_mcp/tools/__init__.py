@@ -1,4 +1,4 @@
-"""Tool modules for the HULMS Canvas MCP server."""
+"""Tool modules for the Canvas MCP server."""
 
 from .grades import register_grade_tools
 from .images import register_image_tools

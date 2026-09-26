@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HULMS Canvas MCP Server
+Canvas MCP Server
 
 A single-user, local (stdio-only) Model Context Protocol server for Canvas LMS.
 Forked from vishalsachdev/canvas-mcp (MIT); stripped of the educator and hosted
@@ -35,8 +35,8 @@ def create_server() -> FastMCP:
 
 
 def register_all_tools(mcp: FastMCP) -> None:
-    """Register the eleven-tool HULMS surface (plus env-gated student writes)."""
-    log_info("Registering HULMS tools...")
+    """Register the eleven-tool surface (plus env-gated student writes)."""
+    log_info("Registering tools...")
     install_tool_result_contract(mcp)
 
     register_surface_tools(mcp)
@@ -87,7 +87,7 @@ def test_connection() -> bool:
 def main() -> None:
     """Main entry point for the Canvas MCP server."""
     parser = argparse.ArgumentParser(
-        description="HULMS Canvas MCP Server (local, single-user, stdio)"
+        description="Canvas MCP Server (local, single-user, stdio)"
     )
     parser.add_argument("--test", action="store_true",
                         help="Test Canvas API connection and exit")
@@ -102,7 +102,7 @@ def main() -> None:
         sys.exit(1)
 
     if args.config:
-        print("HULMS Canvas MCP Server Configuration:", file=sys.stderr)
+        print("Canvas MCP Server Configuration:", file=sys.stderr)
         print(f"  Server Name: {config.mcp_server_name}", file=sys.stderr)
         print(f"  Canvas API URL: {config.canvas_api_url}", file=sys.stderr)
         print(f"  Timezone: {config.timezone}", file=sys.stderr)

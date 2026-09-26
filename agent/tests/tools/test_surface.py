@@ -1,4 +1,4 @@
-"""Tests for the eleven-tool HULMS surface."""
+"""Tests for the eleven-tool surface."""
 
 from unittest.mock import AsyncMock, patch
 

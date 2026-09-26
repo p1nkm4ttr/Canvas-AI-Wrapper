@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hulms-agent"
+name = "canvas-agent"
 version = "1.11.0"
-description = "Personal Canvas MCP server for Habib University (fork of vishalsachdev/canvas-mcp, stripped to the single-user student surface)"
+description = "Personal Canvas MCP server for one student (fork of vishalsachdev/canvas-mcp, stripped to the single-user student surface)"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
@@ -25,14 +25,14 @@ dependencies = [
 ]
 
 [project.scripts]
-hulms-server = "canvas_mcp.server:main"
-hulms-audit = "canvas_mcp.audit:main"
-hulms-agenda = "canvas_mcp.agenda:main"
-hulms-extract = "canvas_mcp.extract_cli:main"
-hulms-courses = "canvas_mcp.courses_cli:main"
-hulms-ics = "canvas_mcp.ics_cli:main"
-hulms-brief = "canvas_mcp.brief_cli:main"
-hulms-backup = "canvas_mcp.backup_cli:main"
+canvas-server = "canvas_mcp.server:main"
+canvas-audit = "canvas_mcp.audit:main"
+canvas-agenda = "canvas_mcp.agenda:main"
+canvas-extract = "canvas_mcp.extract_cli:main"
+canvas-courses = "canvas_mcp.courses_cli:main"
+canvas-ics = "canvas_mcp.ics_cli:main"
+canvas-brief = "canvas_mcp.brief_cli:main"
+canvas-backup = "canvas_mcp.backup_cli:main"
 
 [tool.hatch.version]
 path = "src/canvas_mcp/__init__.py"

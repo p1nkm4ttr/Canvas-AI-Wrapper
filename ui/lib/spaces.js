@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { execFileSync, spawn } from "child_process";
 
-// hulms-ui/ lives next to hulms-agent/ inside the project root.
+// ui/ lives next to agent/ inside the project root.
 export const PROJECT_ROOT = path.resolve(process.cwd(), "..");
 export const SPACES_DIR = path.join(PROJECT_ROOT, "spaces");
 // Platform glue. The Python venv puts console scripts in Scripts\*.exe on
@@ -11,7 +11,7 @@ export const SPACES_DIR = path.join(PROJECT_ROOT, "spaces");
 const WIN = process.platform === "win32";
 export const AGENT_BIN = path.join(
   PROJECT_ROOT,
-  "hulms-agent",
+  "agent",
   ".venv",
   WIN ? "Scripts" : "bin"
 );
@@ -33,12 +33,12 @@ export function openFolder(dir) {
   spawn(opener, [dir], { detached: true, stdio: "ignore" }).unref();
 }
 // Generated at runtime (machine-specific absolute path; never committed).
-const MCP_CONFIG_PATH = path.join(process.cwd(), "hulms-mcp.local.json");
+const MCP_CONFIG_PATH = path.join(process.cwd(), "canvas-mcp.local.json");
 
 export function ensureMcpConfig() {
   const config = {
     mcpServers: {
-      hulms: { command: agentBin("hulms-server"), args: [] },
+      canvas: { command: agentBin("canvas-server"), args: [] },
     },
   };
   fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(config, null, 2));
@@ -111,35 +111,35 @@ export function writeSpaceFile(spaceId, file, content) {
 }
 
 export const ALLOWED_TOOLS = [
-  "mcp__hulms__get_agenda",
-  "mcp__hulms__get_courses",
-  "mcp__hulms__get_assignment",
-  "mcp__hulms__get_announcements",
-  "mcp__hulms__get_calendar",
-  "mcp__hulms__get_todo",
-  "mcp__hulms__get_peer_reviews",
-  "mcp__hulms__get_syllabus",
-  "mcp__hulms__get_grade_weights",
-  "mcp__hulms__get_my_grades",
-  "mcp__hulms__get_document_images",
-  "mcp__hulms__render_document_pages",
-  "mcp__hulms__crop_image",
-  "mcp__hulms__fetch_web_image",
-  "mcp__hulms__get_course_map",
-  "mcp__hulms__create_planner_note",
-  "mcp__hulms__get_my_submission",
-  "mcp__hulms__get_study_context",
-  "mcp__hulms__get_file_text",
-  "mcp__hulms__search_course_content",
-  "mcp__hulms__get_announcement_context",
-  "mcp__hulms__read_local_document",
-  "mcp__hulms__index_course_files",
-  "mcp__hulms__add_plan_event",
-  "mcp__hulms__list_plan_events",
-  "mcp__hulms__delete_plan_event",
-  "mcp__hulms__log_retrieval_item",
-  "mcp__hulms__get_due_reviews",
-  "mcp__hulms__record_review_result",
+  "mcp__canvas__get_agenda",
+  "mcp__canvas__get_courses",
+  "mcp__canvas__get_assignment",
+  "mcp__canvas__get_announcements",
+  "mcp__canvas__get_calendar",
+  "mcp__canvas__get_todo",
+  "mcp__canvas__get_peer_reviews",
+  "mcp__canvas__get_syllabus",
+  "mcp__canvas__get_grade_weights",
+  "mcp__canvas__get_my_grades",
+  "mcp__canvas__get_document_images",
+  "mcp__canvas__render_document_pages",
+  "mcp__canvas__crop_image",
+  "mcp__canvas__fetch_web_image",
+  "mcp__canvas__get_course_map",
+  "mcp__canvas__create_planner_note",
+  "mcp__canvas__get_my_submission",
+  "mcp__canvas__get_study_context",
+  "mcp__canvas__get_file_text",
+  "mcp__canvas__search_course_content",
+  "mcp__canvas__get_announcement_context",
+  "mcp__canvas__read_local_document",
+  "mcp__canvas__index_course_files",
+  "mcp__canvas__add_plan_event",
+  "mcp__canvas__list_plan_events",
+  "mcp__canvas__delete_plan_event",
+  "mcp__canvas__log_retrieval_item",
+  "mcp__canvas__get_due_reviews",
+  "mcp__canvas__record_review_result",
   "WebSearch",
   "WebFetch",
   "Read",

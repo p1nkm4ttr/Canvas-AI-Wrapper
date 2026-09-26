@@ -1,8 +1,8 @@
 """Bulk extraction CLI: index a whole course's files into the SQLite cache.
 
 Usage:
-    hulms-extract "Data Structures"     # module files + the flat files listing
-    hulms-extract 4361 --modules-only   # only files placed in modules
+    canvas-extract "Data Structures"     # module files + the flat files listing
+    canvas-extract 4361 --modules-only   # only files placed in modules
 
 Thin wrapper over core/indexing.py — the index_course_files MCP tool runs the
 same code. Concluded-course access may be withdrawn; extracting early is the

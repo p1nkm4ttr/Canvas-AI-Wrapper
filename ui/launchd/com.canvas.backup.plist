@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.hulms.backup</string>
+  <string>com.canvas.backup</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/jaweriaamer/Documents/GitHub/Canvas-AI-Wrapper/hulms-agent/.venv/bin/hulms-backup</string>
+    <string>__REPO__/agent/.venv/bin/canvas-backup</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/jaweriaamer/Documents/GitHub/Canvas-AI-Wrapper/hulms-agent</string>
+  <string>__REPO__/agent</string>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Weekday</key>
@@ -20,8 +20,8 @@
     <integer>0</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>/Users/jaweriaamer/Library/Logs/hulms-backup.log</string>
+  <string>__HOME__/Library/Logs/canvas-backup.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/jaweriaamer/Library/Logs/hulms-backup.log</string>
+  <string>__HOME__/Library/Logs/canvas-backup.log</string>
 </dict>
 </plist>

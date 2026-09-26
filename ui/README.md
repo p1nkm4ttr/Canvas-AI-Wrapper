@@ -1,10 +1,10 @@
-# hulms-ui
+# ui
 
-Local chat UI for the HULMS assistant (build brief step 5). One Next.js page
+Local chat UI for Canvas Coach (build brief step 5). One Next.js page
 on localhost:3117; an API route spawns `claude -p` per message and streams
 its output to the browser. No agent loop, no API key — Claude Code's
 subscription auth does the work, and all Canvas access goes through the
-hulms MCP server.
+canvas MCP server.
 
 ## Run
 
@@ -43,5 +43,5 @@ code. macOS scheduling lives in `launchd/`.
 
 - `../spaces/` is personal data (memory, plans, dropped files) and is not
   under version control anywhere.
-- The MCP config (`hulms-mcp.local.json`) is generated at runtime with the
+- The MCP config (`canvas-mcp.local.json`) is generated at runtime with the
   resolved server path — machine-specific, gitignored.

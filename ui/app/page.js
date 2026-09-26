@@ -83,16 +83,26 @@ function StreamingText({ text }) {
 }
 
 /* ---------- conversation store: multiple named conversations per space ----------
-   v2: hulms:v2:<space> = {list: [{id, title, sessionId, messages, updatedAt}], activeId}
-   v1 (hulms:<space> = {messages, sessionId}) is migrated on first load. */
+   v2: canvas:v2:<space> = {list: [{id, title, sessionId, messages, updatedAt}], activeId}
+   Older keys (a previous project name) are migrated on first load. */
+const LEGACY_PREFIX = "hulms";
 const store = {
   load(space) {
     try {
-      const v2 = JSON.parse(localStorage.getItem(`hulms:v2:${space}`));
+      const v2 = JSON.parse(localStorage.getItem(`canvas:v2:${space}`));
       if (v2 && Array.isArray(v2.list)) return v2;
     } catch {}
     try {
-      const v1 = JSON.parse(localStorage.getItem(`hulms:${space}`));
+      const old = localStorage.getItem(`${LEGACY_PREFIX}:v2:${space}`);
+      if (old) {
+        localStorage.setItem(`canvas:v2:${space}`, old);
+        localStorage.removeItem(`${LEGACY_PREFIX}:v2:${space}`);
+        const v2 = JSON.parse(old);
+        if (v2 && Array.isArray(v2.list)) return v2;
+      }
+    } catch {}
+    try {
+      const v1 = JSON.parse(localStorage.getItem(`${LEGACY_PREFIX}:${space}`));
       if (v1 && v1.messages?.length) {
         const conv = {
           id: newId(),
@@ -102,15 +112,15 @@ const store = {
           updatedAt: Date.now(),
         };
         const state = { list: [conv], activeId: conv.id };
-        localStorage.setItem(`hulms:v2:${space}`, JSON.stringify(state));
-        localStorage.removeItem(`hulms:${space}`);
+        localStorage.setItem(`canvas:v2:${space}`, JSON.stringify(state));
+        localStorage.removeItem(`${LEGACY_PREFIX}:${space}`);
         return state;
       }
     } catch {}
     return { list: [], activeId: null };
   },
   save(space, state) {
-    localStorage.setItem(`hulms:v2:${space}`, JSON.stringify(state));
+    localStorage.setItem(`canvas:v2:${space}`, JSON.stringify(state));
   },
 };
 
@@ -179,12 +189,12 @@ export default function Home() {
   const [model, setModel] = useState("sonnet");
 
   useEffect(() => {
-    const saved = localStorage.getItem("hulms:model");
+    const saved = localStorage.getItem("canvas:model") || localStorage.getItem(`${LEGACY_PREFIX}:model`);
     if (saved) setModel(saved);
   }, []);
   const pickModel = (m) => {
     setModel(m);
-    localStorage.setItem("hulms:model", m);
+    localStorage.setItem("canvas:model", m);
   };
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -470,7 +480,7 @@ export default function Home() {
       {/* courses sidebar */}
       <div style={{ width: 240, borderRight: `1px solid ${C.border}`, padding: 12, overflowY: "auto", flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 15, margin: "4px 0 14px 4px" }}>
-          HULMS <span style={{ color: C.accent }}>Assistant</span>
+          Canvas <span style={{ color: C.accent }}>Coach</span>
         </div>
         {sideItem("general", "General", !course, () => setCourse(null))}
         <div style={{ color: C.dim, fontSize: 11, margin: "14px 4px 6px", textTransform: "uppercase", letterSpacing: 1 }}>This semester</div>
@@ -591,7 +601,7 @@ export default function Home() {
                     {m.segments.map((s, j) =>
                       s.kind === "tool" ? (
                         <span key={j} style={{ display: "inline-block", background: C.tool, borderRadius: 5, padding: "2px 8px", fontSize: 11, color: C.dim, margin: "4px 6px 4px 0" }}>
-                          ⚙ {s.name.replace("mcp__hulms__", "")}
+                          ⚙ {s.name.replace("mcp__canvas__", "")}
                         </span>
                       ) : m.role === "assistant" ? (
                         busy && i === messages.length - 1

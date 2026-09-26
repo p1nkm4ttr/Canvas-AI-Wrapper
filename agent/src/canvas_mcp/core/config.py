@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 from .logging import log_error, log_info, log_warning
 
-# The repo root (…/hulms-agent), three levels above src/canvas_mcp/core/.
+# The repo root (…/agent), three levels above src/canvas_mcp/core/.
 # MCP clients like Claude Desktop spawn the server with an arbitrary working
 # directory, so the .env lookup can never rely on CWD alone.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -178,7 +178,7 @@ class Config:
         # Required configuration. This project's .env uses CANVAS_HOST and
         # CANVAS_TOKEN; the upstream names CANVAS_API_URL / CANVAS_API_TOKEN
         # are accepted as fallbacks. The normalizer appends /api/v1 to a bare
-        # host, so CANVAS_HOST=https://hulms.instructure.com is sufficient.
+        # host, so CANVAS_HOST=https://your-school.instructure.com is sufficient.
         self.canvas_api_token = (
             os.getenv("CANVAS_TOKEN") or os.getenv("CANVAS_API_TOKEN", "")
         )

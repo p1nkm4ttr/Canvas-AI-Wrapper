@@ -117,12 +117,12 @@ async def run(force: bool = False) -> int:
 
     details = "\n".join(lines)
     upsert_brief(today.isoformat(), summary, details)
-    print(f"HULMS brief for {today}: {summary}\n\n{details}")
+    print(f"Canvas brief for {today}: {summary}\n\n{details}")
     return 0
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate the HULMS daily brief")
+    parser = argparse.ArgumentParser(description="Generate the daily brief")
     parser.add_argument("--force", action="store_true",
                         help="regenerate even if today's brief already exists")
     args = parser.parse_args()

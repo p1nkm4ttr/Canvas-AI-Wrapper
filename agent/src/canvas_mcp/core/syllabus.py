@@ -115,11 +115,11 @@ async def resolve_syllabus(
         "url": "",
         "note": (
             "No syllabus in the Canvas field and no syllabus-looking file in "
-            "this course. At Habib, syllabi are often hosted on Simple Syllabus "
-            "(https://habib.simplesyllabus.com — behind university SSO, not "
-            "readable by this tool; check the course's Simple Syllabus link in "
-            "Canvas's course navigation). A syllabus read there can be saved "
-            "as a PDF into the course space for extraction."
+            "this course. Many institutions host syllabi in an external tool "
+            "(e.g. Simple Syllabus) behind SSO, which this tool cannot read; "
+            "check the course navigation in Canvas for such a link. A syllabus "
+            "read there can be saved as a PDF into the course space for "
+            "extraction."
         ),
     }
 

@@ -37,14 +37,14 @@ def _agenda_vevent(item: dict[str, Any]) -> list[str] | None:
     except ValueError:
         return None
     uid_src = f"{item.get('url', '')}|{due_raw}|{item.get('title', '')}"
-    uid = "hulms-canvas-" + md5(uid_src.encode()).hexdigest()
+    uid = "canvas-due-" + md5(uid_src.encode()).hexdigest()
     title = f"Due: {item.get('title', 'Untitled')}"
     course = item.get("course") or ""
     prefix = f"[{course.split('-')[0]}] " if course and course != "-" else ""
     desc = f"{item.get('type', '')} — {item.get('status', '')}\n{item.get('url', '')}"
     return [
         "BEGIN:VEVENT",
-        f"UID:{uid}@hulms",
+        f"UID:{uid}@canvas-coach",
         f"DTSTAMP:{_utc(due)}",
         f"DTSTART:{_utc(due - timedelta(minutes=30))}",
         f"DTEND:{_utc(due)}",
@@ -56,7 +56,7 @@ def _agenda_vevent(item: dict[str, Any]) -> list[str] | None:
 
 def _plan_vevent(ev: dict[str, Any], tz) -> list[str] | None:
     """A coach/student plan event; timed when start is set, else all-day."""
-    uid = f"hulms-plan-{ev['id']}@hulms"
+    uid = f"canvas-plan-{ev['id']}@canvas-coach"
     title = ev.get("title") or "Study session"
     course = ev.get("course") or ""
     summary = (f"[{course}] " if course else "") + title
@@ -99,7 +99,7 @@ def _plan_vevent(ev: dict[str, Any], tz) -> list[str] | None:
 
 
 def _brief_vevent(brief: dict[str, Any]) -> list[str] | None:
-    """A daily brief as an all-day event: '☀ HULMS: 2 due · 3 announcements'."""
+    """A daily brief as an all-day event: '☀ Canvas: 2 due · 3 announcements'."""
     try:
         day = datetime.strptime(brief["date"], "%Y-%m-%d").date()
     except (KeyError, ValueError):
@@ -107,11 +107,11 @@ def _brief_vevent(brief: dict[str, Any]) -> list[str] | None:
     next_day = day + timedelta(days=1)
     lines = [
         "BEGIN:VEVENT",
-        f"UID:hulms-brief-{brief['date']}@hulms",
+        f"UID:canvas-brief-{brief['date']}@canvas-coach",
         f"DTSTAMP:{_utc(datetime.now(timezone.utc))}",
         f"DTSTART;VALUE=DATE:{day.strftime('%Y%m%d')}",
         f"DTEND;VALUE=DATE:{next_day.strftime('%Y%m%d')}",
-        f"SUMMARY:{_esc('☀ HULMS: ' + (brief.get('summary') or 'brief'))}",
+        f"SUMMARY:{_esc('☀ Canvas: ' + (brief.get('summary') or 'brief'))}",
     ]
     if brief.get("details"):
         lines.append(f"DESCRIPTION:{_esc(brief['details'])}")
@@ -125,13 +125,13 @@ def build_ics(
     tz,
     briefs: list[dict] | None = None,
 ) -> str:
-    """The merged HULMS calendar as an iCalendar document."""
+    """The merged Canvas Coach calendar as an iCalendar document."""
     lines: list[str] = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//HULMS Assistant//EN",
+        "PRODID:-//Canvas Coach//EN",
         "CALSCALE:GREGORIAN",
-        "X-WR-CALNAME:HULMS",
+        "X-WR-CALNAME:Canvas Coach",
         "X-WR-CALDESC:Canvas deadlines and study plan",
         "X-PUBLISHED-TTL:PT1H",
         "REFRESH-INTERVAL;VALUE=DURATION:PT1H",

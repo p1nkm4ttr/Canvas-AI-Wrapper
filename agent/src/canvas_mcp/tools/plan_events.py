@@ -48,7 +48,7 @@ def register_plan_event_tools(mcp: FastMCP) -> None:
         """Put a study session or milestone on the student's calendar feed
         (their phone subscribes to it). Use when a plan lands on concrete
         dates: revision sessions, paper milestones, exam-prep blocks.
-        Times are local (Asia/Karachi). For items that belong in Canvas
+        Times are local (the TIMEZONE from .env). For items that belong in Canvas
         itself, also call create_planner_note.
 
         Args:

@@ -11,7 +11,7 @@ from canvas_mcp.tools.study import register_study_tools
 
 @pytest.fixture(autouse=True)
 def temp_db(tmp_path, monkeypatch):
-    monkeypatch.setenv("HULMS_DB", str(tmp_path / "study.db"))
+    monkeypatch.setenv("CANVAS_DB", str(tmp_path / "study.db"))
     db.close_conn()
     yield
     db.close_conn()
@@ -180,7 +180,7 @@ async def test_search_finds_seeded_text():
 async def test_search_empty_index_says_so():
     result = await get_tool("search_course_content")("dijkstra")
     assert result["count"] == 0
-    assert "note" in result and "hulms-extract" in result["note"]
+    assert "note" in result and "canvas-extract" in result["note"]
 
 
 async def test_search_scoped_to_course():
@@ -282,7 +282,7 @@ async def test_download_failure_is_not_cached():
 @pytest.fixture
 def fake_spaces(tmp_path, monkeypatch):
     import canvas_mcp.core.config as config_module
-    root = tmp_path / "hulms-agent"
+    root = tmp_path / "agent"
     root.mkdir()
     monkeypatch.setattr(config_module, "REPO_ROOT", root)
     spaces = tmp_path / "spaces"

@@ -12,7 +12,7 @@ KHI = ZoneInfo("Asia/Karachi")
 
 @pytest.fixture(autouse=True)
 def temp_db(tmp_path, monkeypatch):
-    monkeypatch.setenv("HULMS_DB", str(tmp_path / "ics.db"))
+    monkeypatch.setenv("CANVAS_DB", str(tmp_path / "ics.db"))
     db.close_conn()
     yield
     db.close_conn()
@@ -42,7 +42,7 @@ def test_ics_timed_event_converts_karachi_to_utc():
     assert "DTSTART:20260907T140000Z" in ics
     assert "DTEND:20260907T153000Z" in ics
     assert "SUMMARY:[OS] OS prep" in ics
-    assert "UID:hulms-plan-1@hulms" in ics
+    assert "UID:canvas-plan-1@canvas-coach" in ics
 
 
 def test_ics_all_day_event():
@@ -60,7 +60,7 @@ def test_ics_canvas_deadline_and_escaping():
     assert r"SUMMARY:[CS 101] Due: HW\; with\, commas" in ics
     # 23:59 Karachi == 18:59 UTC; event ends at the due moment
     assert "DTEND:20260908T185900Z" in ics
-    assert "hulms-canvas-" in ics
+    assert "canvas-due-" in ics
 
 
 def test_ics_malformed_entries_are_skipped_not_fatal():
@@ -81,7 +81,7 @@ def test_brief_renders_as_all_day_event():
     ics = build_ics([], [], KHI, briefs=[{"date": "2026-08-25",
                                           "summary": "2 due · 5 reviews",
                                           "details": details}])
-    assert "UID:hulms-brief-2026-08-25@hulms" in ics
+    assert "UID:canvas-brief-2026-08-25@canvas-coach" in ics
     assert "DTSTART;VALUE=DATE:20260825" in ics
-    assert "SUMMARY:☀ HULMS: 2 due · 5 reviews" in ics
+    assert "SUMMARY:☀ Canvas: 2 due · 5 reviews" in ics
     assert "DESCRIPTION:DUE THIS WEEK:" + chr(92) + "n  HW1" in ics

@@ -1,7 +1,7 @@
 import "katex/dist/katex.min.css";
 import "./globals.css";
 
-export const metadata = { title: "HULMS Assistant" };
+export const metadata = { title: "Canvas Coach" };
 
 export default function RootLayout({ children }) {
   return (

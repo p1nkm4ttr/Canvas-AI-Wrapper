@@ -1,6 +1,6 @@
 """Backup: everything git does not protect, in one zip.
 
-Covers hulms.db (extracted course corpus, retrieval ledger, plan events,
+Covers canvas.db (extracted course corpus, retrieval ledger, plan events,
 briefs — the corpus is the hedge against concluded-course access being
 withdrawn) and the spaces/ folders (memory, plans, dropped syllabi).
 
@@ -8,9 +8,9 @@ Deliberately EXCLUDED: .env — the Canvas token never goes into an archive
 that might travel. The code itself lives in git and needs no backup here.
 
 Usage:
-    hulms-backup                # to <project root>/backups/
-    hulms-backup D:\\usb        # to a chosen directory (USB, synced folder)
-    hulms-backup --keep 20     # retention (default: last 10 kept)
+    canvas-backup                # to <project root>/backups/
+    canvas-backup D:\\usb        # to a chosen directory (USB, synced folder)
+    canvas-backup --keep 20     # retention (default: last 10 kept)
 """
 
 import argparse
@@ -36,7 +36,7 @@ def create_backup(dest_dir: Path) -> Path:
     """Write one timestamped zip; returns its path."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    target = dest_dir / f"hulms-backup-{stamp}.zip"
+    target = dest_dir / f"canvas-backup-{stamp}.zip"
 
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as zf:
         # SQLite via its backup API — a plain file copy of a live database
@@ -52,7 +52,7 @@ def create_backup(dest_dir: Path) -> Path:
                 dst.close()
             finally:
                 src.close()
-            zf.write(snapshot, "hulms.db")
+            zf.write(snapshot, "canvas.db")
             snapshot.unlink()
 
         spaces = _spaces_root()
@@ -66,7 +66,7 @@ def create_backup(dest_dir: Path) -> Path:
 
 def prune_backups(dest_dir: Path, keep: int) -> list[Path]:
     """Delete all but the newest `keep` backups; returns what was removed."""
-    backups = sorted(dest_dir.glob("hulms-backup-*.zip"))
+    backups = sorted(dest_dir.glob("canvas-backup-*.zip"))
     doomed = backups[:-keep] if keep > 0 else []
     for f in doomed:
         f.unlink()
@@ -75,7 +75,7 @@ def prune_backups(dest_dir: Path, keep: int) -> list[Path]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Back up hulms.db and spaces/ (never the token)"
+        description="Back up canvas.db and spaces/ (never the token)"
     )
     parser.add_argument("dest", nargs="?", help="destination directory (default: <project>/backups)")
     parser.add_argument("--keep", type=int, default=10,

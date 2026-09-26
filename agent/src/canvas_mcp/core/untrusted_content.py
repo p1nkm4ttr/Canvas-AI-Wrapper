@@ -57,7 +57,7 @@ def _deferred(rationale: str) -> ReadToolContentPolicy:
 # still exercise the returned values; this registry prevents coverage from
 # silently shrinking when a tool is added or its fencing path is removed.
 READ_TOOL_CONTENT_POLICIES: dict[str, ReadToolContentPolicy] = {
-    # The eleven-tool HULMS surface (create_planner_note is a write, not here).
+    # The eleven-tool surface (create_planner_note is a write, not here).
     "get_agenda": _fenced("fence_untrusted_inline"),
     "get_announcements": _fenced("fence_untrusted"),
     "get_assignment": _fenced("fence_untrusted"),

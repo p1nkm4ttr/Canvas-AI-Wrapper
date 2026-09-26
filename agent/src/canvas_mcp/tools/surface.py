@@ -1,4 +1,4 @@
-"""The HULMS tool surface: eleven tools, exactly as the build brief specifies.
+"""The Canvas tool surface: eleven tools, exactly as the build brief specifies.
 
 Design rules (from CLAUDE.md):
 - Every `course` parameter accepts a name, code, or id, resolved internally.
@@ -71,7 +71,7 @@ def _chunk(seq: list, n: int) -> list[list]:
 
 
 def register_surface_tools(mcp: FastMCP) -> None:
-    """Register the eleven-tool HULMS surface."""
+    """Register the eleven-tool surface."""
 
     # ------------------------------------------------------------------ agenda
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -82,7 +82,7 @@ def register_surface_tools(mcp: FastMCP) -> None:
         """Get everything due across all courses: assignments, quizzes,
         discussions, calendar events, planner notes. Use this for any
         "what's due / what's coming up" question. Times are local
-        (Asia/Karachi); daysUntil is precomputed — do not recalculate dates.
+        (the TIMEZONE from .env); daysUntil is precomputed — do not recalculate dates.
 
         Args:
             days: How many days ahead to look (default 14). Ignored when

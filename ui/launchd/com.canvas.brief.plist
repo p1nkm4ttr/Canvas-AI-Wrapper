@@ -3,14 +3,14 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.hulms.brief</string>
+  <string>com.canvas.brief</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/jaweriaamer/Documents/GitHub/Canvas-AI-Wrapper/hulms-agent/.venv/bin/hulms-brief</string>
+    <string>__REPO__/agent/.venv/bin/canvas-brief</string>
     <string>--force</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/jaweriaamer/Documents/GitHub/Canvas-AI-Wrapper/hulms-agent</string>
+  <string>__REPO__/agent</string>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
@@ -19,8 +19,8 @@
     <integer>30</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>/Users/jaweriaamer/Library/Logs/hulms-brief.log</string>
+  <string>__HOME__/Library/Logs/canvas-brief.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/jaweriaamer/Library/Logs/hulms-brief.log</string>
+  <string>__HOME__/Library/Logs/canvas-brief.log</string>
 </dict>
 </plist>

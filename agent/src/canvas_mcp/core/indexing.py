@@ -1,4 +1,4 @@
-"""Bulk course-file indexing: shared by the hulms-extract CLI and the
+"""Bulk course-file indexing: shared by the canvas-extract CLI and the
 index_course_files MCP tool.
 
 Sequential on purpose (verified fact: sequential-with-cache beats parallel on

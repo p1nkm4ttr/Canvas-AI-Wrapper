@@ -1,8 +1,7 @@
-# hulms-agent
+# agent
 
 Personal Canvas MCP server — single user, local only, stdio transport.
-Built against Habib University's Canvas instance; points at any Canvas
-host via `.env`. See the repository root README for the full system.
+Points at any Canvas host via `.env`. See the repository root README for the full system.
 
 ## Provenance
 
@@ -22,21 +21,21 @@ python -m venv .venv
 `.env` (gitignored) in this directory:
 
 ```
-CANVAS_HOST=https://hulms.instructure.com
+CANVAS_HOST=https://your-school.instructure.com
 CANVAS_TOKEN=<your token>
-TIMEZONE=Asia/Karachi
+TIMEZONE=Europe/London
 ```
 
 ## Commands
 
-- Start server: `hulms-server` (stdio MCP; registered in Claude Desktop as `hulms`)
-- Test connection: `hulms-server --test`
-- Show config: `hulms-server --config`
-- Corpus audit: `hulms-audit` (all completed courses) / `hulms-audit "Data Struct"`
-- Agenda: `hulms-agenda [days]`
-- Bulk text extraction: `hulms-extract "Data Struct"` (indexes a course for search)
-- Daily brief: `hulms-brief` (scheduled 07:30 + at logon; lands on the phone calendar)
-- Backup: `hulms-backup [dest]` (hulms.db + spaces/, never the token; weekly Sun 20:00; keeps last 10)
+- Start server: `canvas-server` (stdio MCP; registered in Claude Desktop as `canvas`)
+- Test connection: `canvas-server --test`
+- Show config: `canvas-server --config`
+- Corpus audit: `canvas-audit` (all completed courses) / `canvas-audit "Data Struct"`
+- Agenda: `canvas-agenda [days]`
+- Bulk text extraction: `canvas-extract "Data Struct"` (indexes a course for search)
+- Daily brief: `canvas-brief` (scheduled 07:30 + at logon; lands on the phone calendar)
+- Backup: `canvas-backup [dest]` (canvas.db + spaces/, never the token; weekly Sun 20:00; keeps last 10)
 - Run tests: `python -m pytest tests/`
 
 ## Tool surface (step 2)

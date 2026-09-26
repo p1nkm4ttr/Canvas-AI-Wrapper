@@ -1,6 +1,6 @@
-"""Print the merged HULMS calendar (Canvas deadlines + plan events) as ICS.
+"""Print the merged Canvas Coach calendar (Canvas deadlines + plan events) as ICS.
 
-The UI serves this output at /api/hulms.ics for phone calendar subscription.
+The UI serves this output at /api/calendar.ics for phone calendar subscription.
 """
 
 import asyncio

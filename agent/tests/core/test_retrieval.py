@@ -9,7 +9,7 @@ from canvas_mcp.core import db
 
 @pytest.fixture(autouse=True)
 def temp_db(tmp_path, monkeypatch):
-    monkeypatch.setenv("HULMS_DB", str(tmp_path / "r.db"))
+    monkeypatch.setenv("CANVAS_DB", str(tmp_path / "r.db"))
     db.close_conn()
     yield
     db.close_conn()

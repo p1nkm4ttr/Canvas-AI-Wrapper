@@ -1,9 +1,9 @@
-# HULMS Assistant
+# Canvas Coach
 
 A personal AI study assistant for Canvas LMS. One student, one machine,
 no cloud: a local MCP server translates Canvas into tools, and Claude does
-the reasoning — through Claude Desktop or the bundled chat UI. Built for
-Habib University's Canvas instance, but it points at any Canvas host.
+the reasoning — through Claude Desktop or the bundled chat UI. Works
+with any Canvas host.
 
 **The design premise:** tools fetch, the model reasons. There is no agent
 loop, no Anthropic API key, and no summarizer. The intelligence comes from
@@ -43,15 +43,15 @@ data and shaping it honestly.
 ## Architecture
 
 ```
-hulms-agent/   Python MCP server (fork of vishalsachdev/canvas-mcp, MIT)
-               ~20 tools over stdio · SQLite cache + FTS5 · CLIs:
-               hulms-audit, hulms-agenda, hulms-extract, hulms-brief,
-               hulms-ics, hulms-backup, hulms-courses
-hulms-ui/      Next.js chat UI on localhost:3117 · spawns `claude -p`
-               per message (stream-json over SSE) · serves the calendar
-               feed at /api/hulms.ics
-spaces/        per-course working dirs: memory, plans, dropped files
-               (personal data — gitignored)
+agent/     Python MCP server (fork of vishalsachdev/canvas-mcp, MIT)
+           ~20 tools over stdio · SQLite cache + FTS5 · CLIs:
+           canvas-audit, canvas-agenda, canvas-extract, canvas-brief,
+           canvas-ics, canvas-backup, canvas-courses
+ui/        Next.js chat UI on localhost:3117 · spawns `claude -p`
+           per message (stream-json over SSE) · serves the calendar
+           feed at /api/calendar.ics
+spaces/    per-course working dirs: memory, plans, dropped files
+           (personal data — gitignored)
 ```
 
 Canvas-authored text is fenced as untrusted content before it reaches the
@@ -70,36 +70,36 @@ Date arithmetic and grade math happen in the tools, never in the model.
 
 ## Setup
 
-Create `hulms-agent/.env` (gitignored) on either platform:
+Create `agent/.env` (gitignored) on either platform:
 
 ```
 CANVAS_HOST=https://your-school.instructure.com
 CANVAS_TOKEN=your-token-here
-TIMEZONE=Asia/Karachi
+TIMEZONE=Europe/London
 ```
 
 Then, per platform (all paths relative to the repo root):
 
 | | Windows | macOS |
 |---|---|---|
-| MCP server | `cd hulms-agent`, `python -m venv .venv`, `.venv\Scripts\pip install -e .` | `cd hulms-agent`, `python3 -m venv .venv`, `.venv/bin/pip install -e .` |
-| Verify | `.venv\Scripts\hulms-server --test` prints your Canvas name | `.venv/bin/hulms-server --test` prints your Canvas name |
-| Chat UI | `cd hulms-ui`, `npm install`, then `dev.cmd` (dev) or `start.cmd` (built, faster) | `cd hulms-ui`, `npm install`, then `./dev.sh` or `./start.sh` |
-| Claude Desktop | add `hulms-agent\.venv\Scripts\hulms-server.exe` as MCP server `hulms` in `%APPDATA%\Claude\claude_desktop_config.json` | add `hulms-agent/.venv/bin/hulms-server` as MCP server `hulms` in `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Daily brief + weekly backup | Task Scheduler: `hulms-brief.exe --force` daily 07:30, `hulms-backup.exe` Sun 20:00, plus an at-logon `hulms-brief.exe` (skips if today's exists) | `hulms-ui/launchd/` plists, same times; launchd replays a run missed during sleep on wake, so no at-logon job (see `launchd/README.md`) |
+| MCP server | `cd agent`, `python -m venv .venv`, `.venv\Scripts\pip install -e .` | `cd agent`, `python3 -m venv .venv`, `.venv/bin/pip install -e .` |
+| Verify | `.venv\Scripts\canvas-server --test` prints your Canvas name | `.venv/bin/canvas-server --test` prints your Canvas name |
+| Chat UI | `cd ui`, `npm install`, then `dev.cmd` (dev) or `start.cmd` (built, faster) | `cd ui`, `npm install`, then `./dev.sh` or `./start.sh` |
+| Claude Desktop | add `agent\.venv\Scripts\canvas-server.exe` as MCP server `canvas` in `%APPDATA%\Claude\claude_desktop_config.json` | add `agent/.venv/bin/canvas-server` as MCP server `canvas` in `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Daily brief + weekly backup | Task Scheduler: `canvas-brief.exe --force` daily 07:30, `canvas-backup.exe` Sun 20:00, plus an at-logon `canvas-brief.exe` (skips if today's exists) | `ui/launchd/` plists, same times; launchd replays a run missed during sleep on wake, so no at-logon job (see `launchd/README.md`) |
 | Phone calendar | allow inbound TCP 3117 in Windows Firewall (Private profile) | the macOS firewall, if on, prompts once for `node`; allow it |
 
 macOS gotcha: if the repo lives in an iCloud-synced folder (Desktop or
 Documents), iCloud marks dot-folders hidden and Python then ignores the
 venv's `.pth` file, so `import canvas_mcp` fails. Either keep the repo
 outside iCloud, or create the venv as `venv.nosync` and symlink `.venv` to
-it (`ln -s venv.nosync .venv`). Also keep `hulms.db` out of any synced
+it (`ln -s venv.nosync .venv`). Also keep `canvas.db` out of any synced
 folder; two syncing writers corrupt SQLite.
 
 Either UI launcher opens http://localhost:3117. For the phone, subscribe
-(same Wi-Fi) to `http://<this-machine's-lan-ip>:3117/api/hulms.ics` as a
+(same Wi-Fi) to `http://<this-machine's-lan-ip>:3117/api/calendar.ics` as a
 subscribed calendar, choosing "continue without SSL" when iOS asks.
-`hulms-backup` zips the database and spaces (never the token); pass a
+`canvas-backup` zips the database and spaces (never the token); pass a
 directory to target a USB/synced folder.
 
 ## Honest limitations
@@ -116,7 +116,7 @@ directory to target a USB/synced folder.
 
 The MCP server is a fork of
 [vishalsachdev/canvas-mcp](https://github.com/vishalsachdev/canvas-mcp)
-(MIT — license retained in `hulms-agent/LICENSE`), stripped from its
+(MIT — license retained in `agent/LICENSE`), stripped from its
 ~90-tool multi-persona hosted design to a single-user student surface, with
 study mode, extraction, syllabus recovery, spaced retrieval, grades, and
 the calendar pipeline added on top.

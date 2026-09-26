@@ -9,9 +9,9 @@ from canvas_mcp.core.local_files import extract_local_file, index_local_spaces
 
 @pytest.fixture(autouse=True)
 def env(tmp_path, monkeypatch):
-    monkeypatch.setenv("HULMS_DB", str(tmp_path / "l.db"))
+    monkeypatch.setenv("CANVAS_DB", str(tmp_path / "l.db"))
     db.close_conn()
-    root = tmp_path / "hulms-agent"
+    root = tmp_path / "agent"
     root.mkdir()
     monkeypatch.setattr(config_module, "REPO_ROOT", root)
     spaces = tmp_path / "spaces"

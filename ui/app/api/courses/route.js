@@ -4,7 +4,7 @@ import { agentBin } from "../../../lib/spaces";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const exe = agentBin("hulms-courses");
+  const exe = agentBin("canvas-courses");
   const body = await new Promise((resolve) => {
     execFile(exe, [], { timeout: 90_000 }, (err, stdout) => {
       if (err && !stdout) {

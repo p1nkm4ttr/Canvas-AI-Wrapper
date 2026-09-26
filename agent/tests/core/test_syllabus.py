@@ -61,7 +61,7 @@ def test_duplicate_labels_counted_once():
 
 
 def test_real_lettered_breakdown_with_prose_distractors():
-    """Regression fixture shaped like a real Habib syllabus (course 4650):
+    """Regression fixture shaped like a real university syllabus:
     lettered components surrounded by prose that re-mentions percentages."""
     text = """(a) Papers: 35%
     papers will be weighted at 15%. A second final comprehensive essay/paper question
