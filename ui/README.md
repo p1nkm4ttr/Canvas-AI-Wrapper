@@ -39,6 +39,14 @@ code. macOS scheduling lives in `launchd/`.
 3. `-p` starts in Manual permission mode: every needed tool must be in
    `--allowedTools` (see `lib/spaces.js`) or the run blocks forever.
 
+## Backends
+
+`lib/backends/<name>.js` is the whole contract with a CLI: how to build its
+command line, how to translate its output lines into `init` / `text` /
+`tool` / `result` events, and which models it offers. `app/api/backends`
+reports which are installed. Add a CLI by adding a module and listing it in
+`lib/backends/index.js`; nothing in the page changes.
+
 ## Network and permissions
 
 `next start` binds to 127.0.0.1; `feed-proxy.mjs` (started by both launchers)

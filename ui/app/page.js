@@ -219,11 +219,15 @@ export default function Home() {
   const [panelDirty, setPanelDirty] = useState(false);
   const [showIdeas, setShowIdeas] = useState(false);
   const [toast, setToast] = useState(null);
-  const [model, setModel] = useState("sonnet");
+  // "backend:model", e.g. "claude:sonnet" or "codex:gpt-5.5". The list of
+  // installed backends and their models comes from /api/backends.
+  const [model, setModel] = useState("claude:sonnet");
+  const [backends, setBackends] = useState([]);
 
   useEffect(() => {
     const saved = localStorage.getItem("canvas:model") || localStorage.getItem(`${LEGACY_PREFIX}:model`);
-    if (saved) setModel(saved);
+    if (saved) setModel(saved.includes(":") ? saved : `claude:${saved}`);
+    fetch("/api/backends").then((r) => r.json()).then((d) => setBackends(d.backends || [])).catch(() => {});
   }, []);
   const pickModel = (m) => {
     setModel(m);
@@ -468,6 +472,14 @@ export default function Home() {
     };
 
     let sid = conv.sessionId;
+    const [backend, modelId] = (model.includes(":") ? model : `claude:${model}`).split(":");
+    // Chats saved before backends existed were all Claude sessions.
+    const convBackend = conv.backend || (sid ? "claude" : null);
+    if (sid && convBackend && convBackend !== backend) {
+      // A session id belongs to the CLI that created it.
+      sid = null;
+      flashToast(`Switched to ${backend}: this chat continues as a new session there.`);
+    }
     const controller = new AbortController();
     streamsRef.current[key] = { controller };
     try {
@@ -475,7 +487,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text, spaceId: sp, sessionId: sid, model,
+          message: text, spaceId: sp, sessionId: sid, backend, model: modelId,
           courseName: course ? `${course.name} (${course.term})` : null,
         }),
         signal: controller.signal,
@@ -495,23 +507,20 @@ export default function Home() {
           let obj;
           try { obj = JSON.parse(dataLine.slice(6)); } catch { continue; }
 
-          if (obj.type === "system" && obj.subtype === "init") {
-            sid = obj.session_id || sid;
-          } else if (obj.type === "stream_event") {
-            const ev = obj.event || {};
-            if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
-              appendText(ev.delta.text);
-            } else if (ev.type === "content_block_start" && ev.content_block?.type === "tool_use") {
-              const last = assistant.segments[assistant.segments.length - 1];
-              if (last?.kind === "text") last.final = true;
-              assistant.segments.push({ kind: "tool", name: ev.content_block.name });
-              update();
-            }
+          if (obj.type === "init") {
+            sid = obj.sessionId || sid;
+          } else if (obj.type === "text") {
+            appendText(obj.text);
+          } else if (obj.type === "tool") {
+            const last = assistant.segments[assistant.segments.length - 1];
+            if (last?.kind === "text") last.final = true;
+            assistant.segments.push({ kind: "tool", name: obj.name });
+            update();
           } else if (obj.type === "result") {
-            sid = obj.session_id || sid;
-            if (obj.is_error && obj.result) appendText(`\n\n> [error] ${obj.result}`);
+            sid = obj.sessionId || sid;
+            if (obj.isError && obj.text) appendText(`\n\n> [error] ${obj.text}`);
           } else if (obj.type === "spawn_error") {
-            appendText(`\n\n> [claude failed to run: ${obj.error || "exit " + obj.code}]`);
+            appendText(`\n\n> [${backend} failed to run: ${obj.error || "exit " + obj.code}]`);
           }
         }
       }
@@ -525,6 +534,7 @@ export default function Home() {
       conv = {
         ...conv,
         sessionId: sid,
+        backend,
         messages: [...msgs.slice(0, -1), { ...assistant, segments: [...assistant.segments] }],
         updatedAt: Date.now(),
       };
@@ -655,11 +665,14 @@ export default function Home() {
           <select value={model} onChange={(e) => pickModel(e.target.value)}
             title="Model for coach replies — Sonnet is plenty for most study work; heavier models burn your usage limits faster"
             style={{ background: C.panelSoft, color: C.text, border: `1px solid ${C.border}`, borderRadius: 6, padding: "5px 8px", fontSize: 12, cursor: "pointer" }}>
-            <option value="haiku">haiku · fastest</option>
-            <option value="sonnet">sonnet · everyday</option>
-            <option value="opus">opus · hard problems</option>
-            <option value="fable">fable · maximum</option>
-            <option value="default">CLI default</option>
+            {backends.length === 0 && <option value={model}>{model}</option>}
+            {backends.map((b) => (
+              <optgroup key={b.id} label={b.available ? b.label : `${b.label} (not installed)`}>
+                {b.models.map((m) => (
+                  <option key={`${b.id}:${m.id}`} value={`${b.id}:${m.id}`} disabled={!b.available}>{m.label}</option>
+                ))}
+              </optgroup>
+            ))}
           </select>
           {["memory", "plan"].map((t) => (
             <button key={t} onClick={() => (panelTab === t ? setPanelTab(null) : openPanel(t))}
@@ -710,7 +723,7 @@ export default function Home() {
                     {m.segments.map((s, j) =>
                       s.kind === "tool" ? (
                         <span key={j} style={{ display: "inline-block", background: C.tool, borderRadius: 5, padding: "2px 8px", fontSize: 11, color: C.dim, margin: "4px 6px 4px 0" }}>
-                          ⚙ {s.name.replace("mcp__canvas__", "")}
+                          ⚙ {s.name}
                         </span>
                       ) : m.role === "assistant" ? (
                         busy && i === messages.length - 1

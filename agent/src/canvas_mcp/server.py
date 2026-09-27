@@ -10,6 +10,7 @@ auth, and no anonymization layer.
 
 import argparse
 import asyncio
+import os
 import sys
 
 from fastmcp import FastMCP
@@ -48,6 +49,20 @@ def register_all_tools(mcp: FastMCP) -> None:
     # Extra write tools (submit_assignment etc.) register only when named in
     # STUDENT_WRITE_TOOLS (default: none).
     register_student_write_tools(mcp)
+
+    # A client can ask for tools to be withheld: CANVAS_DISABLE_TOOLS is a
+    # comma/space list of tool names. The Codex backend uses it to drop
+    # fetch_web_image, the one tool that could carry data off the machine,
+    # because Codex's sandbox lets the model read files outside its space.
+    disabled = {
+        t.strip() for t in os.getenv("CANVAS_DISABLE_TOOLS", "").replace(",", " ").split() if t.strip()
+    }
+    for name in sorted(disabled):
+        try:
+            mcp.remove_tool(name)
+            log_info(f"Tool withheld by CANVAS_DISABLE_TOOLS: {name}")
+        except Exception as e:  # unknown name: say so, keep going
+            log_warning(f"CANVAS_DISABLE_TOOLS names no such tool: {name} ({type(e).__name__})")
 
     log_info("All tools registered.")
 

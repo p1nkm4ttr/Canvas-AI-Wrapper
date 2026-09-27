@@ -105,6 +105,25 @@ subscribed calendar, choosing "continue without SSL" when iOS asks.
 `canvas-backup` zips the database and spaces (never the token); pass a
 directory to target a USB/synced folder.
 
+## Backends
+
+The chat UI drives a subscription-authenticated agent CLI; the model picker
+lists every backend installed on the machine and its models.
+
+| | Claude Code | Codex CLI |
+|---|---|---|
+| Sign-in | Claude subscription | ChatGPT (the Codex desktop app's bundled CLI is found automatically on Windows; elsewhere `codex` on PATH) |
+| Instructions | `--append-system-prompt-file` | `developer_instructions` config override |
+| Canvas tools | MCP config file | `mcp_servers.canvas.*` config overrides |
+| Streaming | token by token | per message |
+| Confinement | permission rules (allow list + deny list) | OS sandbox: writes only inside the space; reads are not restricted, so `fetch_web_image` and web search are switched off for this backend |
+| Resume | `--resume <session>` | `codex exec resume <thread>` |
+
+A chat's session belongs to the CLI that created it; switching backends on
+an existing chat starts a fresh session there. Adapters live in
+`ui/lib/backends/`; each one turns its CLI's output into the same four
+events the page renders.
+
 ## What is exposed, and what the model can touch
 
 - The UI binds to 127.0.0.1. The only thing on the LAN is `feed-proxy.mjs`,
