@@ -1,63 +1,78 @@
 # ui
 
-Local chat UI for Canvas Coach (build brief step 5). One Next.js page
-on localhost:3117; an API route spawns `claude -p` per message and streams
-its output to the browser. No agent loop, no API key — Claude Code's
-subscription auth does the work, and all Canvas access goes through the
-canvas MCP server.
+The local chat UI. One Next.js page on `127.0.0.1:3117`; an API route spawns an agent CLI (`claude -p` or `codex exec`, chosen in the model picker) per message and streams its output to the browser. No agent loop and no API key: the CLI's subscription sign-in does the work, and all Canvas access goes through the `canvas` MCP server in [`../agent`](../agent/README.md).
 
-## Run
+### Run it
 
-Windows: double-click `dev.cmd` (or run it from a terminal). macOS:
-`./dev.sh`. Either starts the dev server and opens http://localhost:3117.
-`start.cmd` / `./start.sh` build once and serve the production bundle,
-which is noticeably snappier; use the dev launcher only when changing UI
-code. macOS scheduling lives in `launchd/`.
+1. Install dependencies. Node.js 22 or newer.
 
-## How it's put together
+```bash
+npm install
+```
 
-- **Course spaces**: every course (plus "General") is a space — a directory
-  under `~/CanvasCoach/spaces/<id>/` (or `CANVAS_SPACES_DIR`) that is the working directory of the spawned
-  `claude -p`. Conversations resume per space via `--resume <session_id>`.
-- **Memory / planning**: each space holds `memory.md` and `plan.md`. The
-  coach (see `coach.md`) reads and updates them with its file tools; the UI
-  shows and lets you edit them directly (memory / plan buttons). Drop other
-  files (e.g. a Simple Syllabus PDF export) into a space folder and the
-  coach can read them.
-- **Streaming**: `--output-format stream-json --include-partial-messages`,
-  forwarded line-by-line as SSE; the page renders text deltas and tool-use
-  chips.
+2. Start the production build. It builds once (or when you pass `--build`), serves the bundle, starts the phone feed proxy on port 3118, and opens the browser.
 
-## The three traps (from the build brief — do not regress)
+```bash
+start.cmd          # Windows
+```
 
-1. Never pass `--bare`: it skips subscription auth and demands an API key.
-   Claude Code is at 2.1.186 today; re-test after upgrades in case `-p`
-   defaults change.
-2. `ANTHROPIC_API_KEY` is deleted from the child environment in
-   `app/api/chat/route.js` — if it exists, Claude Code prefers it over the
-   subscription.
-3. `-p` starts in Manual permission mode: every needed tool must be in
-   `--allowedTools` (see `lib/spaces.js`) or the run blocks forever.
+```bash
+./start.sh         # macOS
+```
 
-## Backends
+3. For UI development, use the dev server instead. Hot reload, but slower and with React's double rendering.
 
-`lib/backends/<name>.js` is the whole contract with a CLI: how to build its
-command line, how to translate its output lines into `init` / `text` /
-`tool` / `result` events, and which models it offers. `app/api/backends`
-reports which are installed. Add a CLI by adding a module and listing it in
-`lib/backends/index.js`; nothing in the page changes.
+```bash
+dev.cmd            # Windows
+```
 
-## Network and permissions
+```bash
+./dev.sh           # macOS
+```
 
-`next start` binds to 127.0.0.1; `feed-proxy.mjs` (started by both launchers)
-is the only listener on the LAN and serves nothing but `/api/calendar.ics` on
-port 3118. `lib/spaces.js` holds the allow/deny rules that confine the
-spawned CLI's file tools to the space folder; `--disallowedTools` is where
-instruction/settings files are denied. Change those two lists together.
+> [!NOTE]
+> `next build` deletes `.next` while it works, so never build while a production server is running from this folder; stop it first.
 
-## Notes
+### How it is put together
 
-- The spaces folder is personal data (memory, plans, dropped files) and
-  lives outside the repository; it is not under version control anywhere.
-- The MCP config (`canvas-mcp.local.json`) is generated at runtime with the
-  resolved server path — machine-specific, gitignored.
+1. **Course spaces.** Every course, plus General, is a space: a directory under `~/CanvasCoach/spaces/<id>/` (or `CANVAS_SPACES_DIR`) that becomes the working directory of the spawned CLI. `lib/spaces.js` creates it, seeds `memory.md` and `plan.md`, and regenerates `system.md` before every message from `coach.md` plus a listing of the files you dropped in.
+
+2. **Conversations.** Each space has named chats, stored in the browser. A chat remembers the backend and session id that created it, so it resumes there on the next message (`--resume` for Claude Code, `codex exec resume` for Codex). Switching backends on an existing chat starts a fresh session and says so.
+
+3. **Streaming.** The route in `app/api/chat/route.js` spawns the CLI with the prompt on stdin, hands each stdout line to the backend's translator, and forwards the resulting events as SSE. The page renders four event types and nothing else: `init`, `text`, `tool`, `result`.
+
+4. **Panels.** The memory and plan buttons open the space's files for editing in place, bound to the space they were loaded from. Drop files with the upload button or open the folder directly.
+
+### Backends
+
+`lib/backends/<name>.js` is the whole contract with a CLI. To add one:
+
+1. Create a module exporting `id`, `label`, `defaultModel`, `available()`, `models()`, `prepareSpace(dir, systemFile)`, `build({dir, systemFile, sessionId, model})` returning `{cmd, args, env, cwd}`, and `translator()` returning a function from one output line to an array of events.
+
+2. List it in `lib/backends/index.js`. `app/api/backends` reports it to the picker automatically, marked "not installed" until `available()` is true.
+
+3. Confine it. Claude Code is confined by permission rules (`ALLOWED_TOOLS` / `DISALLOWED_TOOLS` in `lib/spaces.js`); Codex by its `workspace-write` sandbox plus `web_search="disabled"` and `CANVAS_DISABLE_TOOLS=fetch_web_image` (see `lib/backends/codex.js`). A new backend needs an answer of its own, measured, not assumed.
+
+> [!WARNING]
+> In Claude Code, `Edit(...)` rules govern every file-writing tool; a `Write(...)` rule is silently ignored. Express denies as `Edit`. This was measured with a real `claude -p` run, and the comment in `lib/spaces.js` says so for a reason.
+
+### Three traps
+
+> [!WARNING]
+> Never pass `--bare` to Claude Code. It skips subscription auth and demands an API key. Claude Code is pinned at 2.1.186 here; re-test after upgrades in case `-p` defaults change.
+
+> [!WARNING]
+> `ANTHROPIC_API_KEY` is deleted from the child environment in `lib/backends/claude.js`, and `OPENAI_API_KEY` in `codex.js`. If a key exists, the CLI prefers it over the subscription and bills it silently.
+
+> [!WARNING]
+> `claude -p` starts in manual permission mode. Every tool it may need must be in `--allowedTools`, or the run blocks forever waiting for an approval nobody can give.
+
+### Network and permissions
+
+1. `next start` binds to `127.0.0.1`. Nobody on the Wi-Fi can reach the chat, uploads or memory files.
+
+2. `feed-proxy.mjs`, started by both launchers, is the only listener on the LAN. It serves `/api/calendar.ics` on port 3118 and 404s everything else. Subscribe the phone to `http://<lan-ip>:3118/api/calendar.ics`.
+
+3. Uploads refuse the names Claude Code and Codex read as instructions (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`) and anything starting with a dot, so a dropped file can never become the coach's orders.
+
+4. `canvas-mcp.local.json` is generated at runtime with the resolved server path. It is machine-specific and gitignored.
