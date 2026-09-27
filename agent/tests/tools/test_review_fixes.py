@@ -90,6 +90,7 @@ async def test_module_items_failure_is_reported_not_hidden():
         mods = await fetch_modules_with_items(1)
     assert mods[0]["items"] == []
     assert "Week 1" in items_coverage_note(mods)
+    assert "UNTRUSTED" in items_coverage_note(mods)   # module names are author-controlled
 
 
 # ---- finding 11: calendar dates in the student's zone ---------------------

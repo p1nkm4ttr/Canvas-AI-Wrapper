@@ -6,8 +6,9 @@ Concluded-course access may be withdrawn, so extracted text is kept in
 SQLite permanently.
 """
 
-import httpx
+from urllib.parse import urlparse
 
+from . import netguard
 from .client import make_canvas_request
 from .db import get_file_text_row, put_file_text, set_file_origin
 from .extract import MAX_DOWNLOAD_BYTES, extract_text, is_extractable
@@ -15,21 +16,17 @@ from .logging import log_debug, log_error
 from .untrusted_content import fence_untrusted_inline
 
 
-async def _download(url: str, timeout: float = 120.0) -> bytes | None:
-    """Download a pre-signed Canvas file URL.
-
-    A bare client: the URL carries its own verifier token, and forwarding the
-    Bearer header across the redirect to storage can break the storage
-    signature.
-    """
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            return resp.content
-    except Exception as e:
-        log_error("File download failed", error_type=type(e).__name__)
+async def _download(url: str, max_bytes: int = MAX_DOWNLOAD_BYTES) -> bytes | None:
+    """Download a Canvas file URL through the shared guarded downloader:
+    public hosts only (plus the Canvas host itself), every redirect hop
+    re-checked, body streamed and abandoned past `max_bytes`."""
+    data, _final, _ct, err = await netguard.download(
+        url, max_bytes=max_bytes, allow_hosts=(netguard.canvas_host(),)
+    )
+    if err:
+        log_error("File download refused or failed", error_type=err.split(":")[0][:40])
         return None
+    return data
 
 
 async def fetch_file_bytes(
@@ -52,7 +49,7 @@ async def fetch_file_bytes(
         return {"error": f"File {file_id} has no download URL (permissions?)."}
     data = await _download(meta["url"])
     if data is None:
-        return {"error": f"Download failed for file {file_id} ('{name}')."}
+        return {"error": f"Download failed for file {file_id} ({fence_untrusted_inline(name, 'file name')})."}
     return name, data
 
 
@@ -89,6 +86,9 @@ async def _from_fallback_url(
     verifier in the link). Cached under the fixed key 'link', since no
     updated_at is available to invalidate on."""
     fid = int(file_id)
+    host = (urlparse(url).hostname or "").lower()
+    if not host or host != netguard.canvas_host():
+        return {"error": f"Could not read file {fid}: its link is not on the Canvas host; refusing to fetch it."}
     cached = get_file_text_row(fid, "link")
     if cached is not None:
         return {"fileId": fid, "name": cached["name"], "status": cached["status"],
@@ -96,7 +96,8 @@ async def _from_fallback_url(
                 "url": f"/files/{fid}", "origin": cached.get("origin", "")}
     data = await _download(url)
     if data is None:
-        return {"error": f"Could not read file {fid}: metadata refused and the link did not download."}
+        return {"error": f"Could not read file {fid}: metadata refused and the link did not download "
+                         f"(or it exceeds the {MAX_DOWNLOAD_BYTES // (1024 * 1024)} MB cap)."}
     name = _sniff_name(fid, data)
     note_prefix = "Fetched through its link (metadata not accessible). "
     if not is_extractable(name):
@@ -195,7 +196,7 @@ async def get_file_text_cached(
     data = await _download(file_url)
     if data is None:
         # NOT cached: a transient network failure must not poison the cache.
-        return {"error": f"Download failed for file {fid} ('{name}')."}
+        return {"error": f"Download failed for file {fid} ({fence_untrusted_inline(name, 'file name')})."}
 
     extraction = extract_text(data, name, real_filename, content_type)
     put_file_text(

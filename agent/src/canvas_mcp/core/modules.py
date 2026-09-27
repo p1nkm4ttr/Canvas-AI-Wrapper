@@ -10,6 +10,7 @@ is the only way the tools should fetch a module tree.
 from typing import Any
 
 from .client import fetch_all_paginated_results
+from .untrusted_content import fence_untrusted_inline
 
 
 async def fetch_modules_with_items(course_id: int | str) -> list[dict[str, Any]] | dict[str, Any]:
@@ -44,7 +45,10 @@ async def fetch_modules_with_items(course_id: int | str) -> list[dict[str, Any]]
 
 def items_coverage_note(mods: list[dict[str, Any]]) -> str | None:
     """One honest sentence naming modules whose items could not be loaded."""
-    missing = [m.get("name") or f"module {m.get('id')}" for m in mods if m.get("itemsError")]
+    missing = [
+        fence_untrusted_inline(m.get("name") or f"module {m.get('id')}", "module name")
+        for m in mods if m.get("itemsError")
+    ]
     if not missing:
         return None
-    return "Items could not be loaded for: " + "; ".join(str(x) for x in missing)
+    return "Items could not be loaded for: " + "; ".join(missing)

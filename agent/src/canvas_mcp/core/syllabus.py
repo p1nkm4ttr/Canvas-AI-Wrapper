@@ -42,9 +42,8 @@ async def _find_syllabus_file(course_id: str | int) -> tuple[int, str] | None:
         if best.get("id"):
             return best["id"], best.get("display_name") or "syllabus"
 
-    modules = await fetch_all_paginated_results(
-        f"/courses/{course_id}/modules", {"include[]": "items", "per_page": 100}
-    )
+    from .modules import fetch_modules_with_items
+    modules = await fetch_modules_with_items(course_id)
     if isinstance(modules, list):
         candidates = [
             (item["content_id"], item.get("title") or "")

@@ -111,9 +111,7 @@ async def test_file_fallback_extracts():
     with patch(
         "canvas_mcp.core.syllabus.make_canvas_request",
         new=AsyncMock(return_value={"syllabus_body": ""}),
-    ), patch(
-        "canvas_mcp.core.syllabus.fetch_all_paginated_results", side_effect=fake_fetch
-    ), patch(
+    ), patch("canvas_mcp.core.syllabus.fetch_all_paginated_results", side_effect=fake_fetch), patch("canvas_mcp.core.modules.fetch_all_paginated_results", side_effect=fake_fetch), patch(
         "canvas_mcp.core.syllabus.get_file_text_cached",
         new=AsyncMock(return_value={"fileId": 777, "name": "CS101 Syllabus.pdf",
                                     "status": "ok", "text": "Midterm 40%...", "note": "",
@@ -139,9 +137,7 @@ async def test_module_walk_when_files_listing_blocked():
     with patch(
         "canvas_mcp.core.syllabus.make_canvas_request",
         new=AsyncMock(return_value={"syllabus_body": ""}),
-    ), patch(
-        "canvas_mcp.core.syllabus.fetch_all_paginated_results", side_effect=fake_fetch
-    ), patch(
+    ), patch("canvas_mcp.core.syllabus.fetch_all_paginated_results", side_effect=fake_fetch), patch("canvas_mcp.core.modules.fetch_all_paginated_results", side_effect=fake_fetch), patch(
         "canvas_mcp.core.syllabus.get_file_text_cached",
         new=AsyncMock(return_value={"fileId": 888, "name": "Course Outline Spring 2025",
                                     "status": "ok", "text": "weights...", "note": "",
@@ -161,9 +157,7 @@ async def test_scanned_syllabus_file_reported_honestly():
     with patch(
         "canvas_mcp.core.syllabus.make_canvas_request",
         new=AsyncMock(return_value={"syllabus_body": ""}),
-    ), patch(
-        "canvas_mcp.core.syllabus.fetch_all_paginated_results", side_effect=fake_fetch
-    ), patch(
+    ), patch("canvas_mcp.core.syllabus.fetch_all_paginated_results", side_effect=fake_fetch), patch("canvas_mcp.core.modules.fetch_all_paginated_results", side_effect=fake_fetch), patch(
         "canvas_mcp.core.syllabus.get_file_text_cached",
         new=AsyncMock(return_value={"fileId": 999, "name": "syllabus.pdf",
                                     "status": "scanned", "text": "",
@@ -183,9 +177,7 @@ async def test_nothing_found_is_honest():
     with patch(
         "canvas_mcp.core.syllabus.make_canvas_request",
         new=AsyncMock(return_value={"syllabus_body": ""}),
-    ), patch(
-        "canvas_mcp.core.syllabus.fetch_all_paginated_results", side_effect=fake_fetch
-    ):
+    ), patch("canvas_mcp.core.syllabus.fetch_all_paginated_results", side_effect=fake_fetch), patch("canvas_mcp.core.modules.fetch_all_paginated_results", side_effect=fake_fetch):
         result = await resolve_syllabus(4361)
     assert result["source"] == "none"
     assert "No syllabus" in result["note"]

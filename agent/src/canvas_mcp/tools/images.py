@@ -6,16 +6,13 @@ student by putting the `embed` URL in a markdown image tag.
 """
 
 import hashlib
-import ipaddress
-import socket
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
-import httpx
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from ..core import netguard
 from ..core.files import fetch_file_bytes
 from ..core.images import (
     DEFAULT_MAX_IMAGES,
@@ -75,66 +72,6 @@ _HOW_TO_USE = (
     "View an image by passing its `file` path to Read; show it to the "
     "student by embedding `![caption](<embed>)` in your reply."
 )
-
-
-def _public_host_error(host: str) -> str | None:
-    """SSRF guard. The model supplies the URL, so it must not be able to aim
-    this server at localhost, the LAN, or cloud metadata. Every address the
-    name resolves to must be public."""
-    if not host:
-        return "URL has no host."
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return f"{host} does not resolve."
-    for info in infos:
-        try:
-            ip = ipaddress.ip_address(info[4][0])
-        except ValueError:
-            continue
-        if not ip.is_global:
-            return f"{host} resolves to a non-public address; refusing to fetch it."
-    return None
-
-
-async def _download_public_image(url: str, max_hops: int = 5):
-    """Redirects are followed by hand so EVERY hop is re-validated (a public
-    host redirecting to 127.0.0.1 is the classic bypass), and the body is
-    streamed so the size cap bounds what is downloaded, not just what is kept.
-    Returns (bytes, final_url, ext, error)."""
-    current = url
-    async with httpx.AsyncClient(follow_redirects=False, timeout=60) as client:
-        for _ in range(max_hops):
-            parsed = urlparse(current)
-            if parsed.scheme not in ("http", "https"):
-                return None, current, None, "url must be http(s)."
-            err = _public_host_error(parsed.hostname or "")
-            if err:
-                return None, current, None, err
-            try:
-                async with client.stream("GET", current) as resp:
-                    if resp.is_redirect:
-                        nxt = resp.next_request
-                        if nxt is None:
-                            return None, current, None, "Redirect without a target."
-                        current = str(nxt.url)
-                        continue
-                    resp.raise_for_status()
-                    content_type = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
-                    ext = _CT_EXT.get(content_type)
-                    if ext is None:
-                        return None, current, None, f"Not an image (content-type: {content_type or 'unknown'})."
-                    buf = bytearray()
-                    async for chunk in resp.aiter_bytes():
-                        buf.extend(chunk)
-                        if len(buf) > MAX_WEB_IMAGE_BYTES:
-                            return None, current, None, (
-                                f"Image too large (over {MAX_WEB_IMAGE_BYTES // (1024 * 1024)} MB)."
-                            )
-                    return bytes(buf), current, ext, None
-            except Exception as e:
-                return None, current, None, f"Fetch failed: {type(e).__name__}: {e}"
-    return None, current, None, "Too many redirects."
 
 
 def register_image_tools(mcp: FastMCP) -> None:
@@ -322,9 +259,13 @@ def register_image_tools(mcp: FastMCP) -> None:
         Args:
             url: Direct http(s) URL of the image itself.
         """
-        data, final_url, ext, err = await _download_public_image(url)
+        data, final_url, content_type, err = await netguard.download(
+            url, max_bytes=MAX_WEB_IMAGE_BYTES, accept_content_type=lambda ct: ct in _CT_EXT,
+        )
         if err:
-            return {"error": err}
+            return {"error": err if "content type" not in err
+                    else f"Not an image (content-type: {content_type or 'unknown'})."}
+        ext = _CT_EXT[content_type]
 
         digest = hashlib.md5(url.encode()).hexdigest()[:16]
         saved = save_figures("web", [(f"{digest}{ext}", data)])

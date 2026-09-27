@@ -15,7 +15,7 @@ and the <a href="/courses/5351/files/889874/download?download_frd=1">rubric</a>.
 
 
 def test_anchors_come_first_with_their_own_url_and_title():
-    refs = harvest_file_refs(HTML)
+    refs = harvest_file_refs(HTML, "https://canvas.school.edu")
     assert [r["fileId"] for r in refs] == [889867, 889874, 900001]
     assert refs[0]["url"] == "https://canvas.school.edu/courses/5351/files/889867?verifier=abc&wrap=1"
     assert refs[0]["title"] == "the brief"          # tags stripped, entities decoded
@@ -25,9 +25,9 @@ def test_anchors_come_first_with_their_own_url_and_title():
 
 def test_duplicates_collapse_and_empty_is_fine():
     two = "<a href='/files/1'>a</a><a href=\"/courses/2/files/1\">b</a>"
-    assert len(harvest_file_refs(two)) == 1
-    assert harvest_file_refs(None) == []
-    assert harvest_file_refs("<p>no links</p>") == []
+    assert len(harvest_file_refs(two, "https://c")) == 1
+    assert harvest_file_refs(None, "https://c") == []
+    assert harvest_file_refs("<p>no links</p>", "https://c") == []
 
 
 def test_external_links_exclude_canvas_and_dedupe():
@@ -37,3 +37,17 @@ def test_external_links_exclude_canvas_and_dedupe():
 
 def test_external_links_fall_back_to_the_url_as_title():
     assert harvest_external_links('<a href="https://x.example/a"></a>', "https://c")[0]["title"] == "https://x.example/a"
+
+
+def test_off_origin_file_paths_are_not_file_references():
+    """The SSRF the reviewer found: an outside URL whose path looks like a
+    Canvas file must not become a download, as an anchor OR a bare match."""
+    html = ('<a href="http://127.0.0.1:8000/files/987654321">handout</a>'
+            '<img src="https://evil.example/courses/1/files/5/preview">'
+            '<a href="/courses/1/files/42">real</a>')
+    refs = harvest_file_refs(html, "https://canvas.school.edu")
+    assert [r["fileId"] for r in refs] == [42]
+
+
+def test_protocol_relative_is_not_same_origin():
+    assert harvest_file_refs('<a href="//evil.example/files/7">x</a>', "https://canvas.school.edu") == []

@@ -25,31 +25,54 @@ def _inner_text(html: str) -> str:
     return " ".join(unescape(_TAG.sub("", html)).split())
 
 
-def _file_id(href: str) -> int | None:
+def _same_origin(href: str, origin: str) -> bool:
+    """Relative, or absolute on the configured Canvas host. Anything else is
+    not a Canvas file reference no matter what its path looks like — an
+    instructor-authored <a href="http://127.0.0.1/files/1"> must never turn
+    into a download."""
+    h = href.strip().lower()
+    if h.startswith(("http://", "https://")):
+        return bool(origin) and h.startswith(origin.lower().rstrip("/") + "/")
+    return h.startswith("/") and not h.startswith("//")
+
+
+def _file_id(href: str, origin: str) -> int | None:
+    if not _same_origin(href, origin):
+        return None
     m = _FILE_REF.search(href)
     if not m:
         return None
     return int(m.group(2) or m.group(3))
 
 
-def harvest_file_refs(html: str | None) -> list[dict[str, Any]]:
+_ABS_ATTR = re.compile(r"(?:href|src|data-api-endpoint)=([\"'])((?:https?:)?//[^\"']*)\1", re.IGNORECASE)
+
+
+def harvest_file_refs(html: str | None, canvas_origin_url: str | None = None) -> list[dict[str, Any]]:
     """Canvas file references in an HTML body, in document order, deduped.
 
     Each entry is {fileId, url, title}: `url` is the link's own href
     (verifier included) when the reference came from an anchor, else "";
     `title` is the anchor text, else "". Bare references (``data-api-endpoint``
-    attributes, inline images) are included after the anchors.
+    attributes, inline images) are included after the anchors. Only relative
+    references and absolute ones on the configured Canvas origin count.
     """
     html = html or ""
+    origin = canvas_origin_url if canvas_origin_url is not None else canvas_origin()
     out: list[dict[str, Any]] = []
     seen: set[int] = set()
     for href, inner in _ANCHOR.findall(html):
-        fid = _file_id(href)
+        fid = _file_id(unescape(href), origin)
         if fid is None or fid in seen:
             continue
         seen.add(fid)
         out.append({"fileId": fid, "url": unescape(href), "title": _inner_text(inner)[:120]})
-    for m in _FILE_REF.finditer(html):
+    # Bare references: drop every absolute off-origin attribute value first so
+    # an outside URL's path can't masquerade as a Canvas file id.
+    def _keep(m: re.Match) -> str:
+        return m.group(0) if _same_origin(unescape(m.group(2)), origin) else ""
+    scrubbed = _ABS_ATTR.sub(_keep, html)
+    for m in _FILE_REF.finditer(scrubbed):
         fid = int(m.group(2) or m.group(3))
         if fid not in seen:
             seen.add(fid)

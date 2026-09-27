@@ -14,6 +14,7 @@ from .client import fetch_all_paginated_results, make_canvas_request
 from .extract import EXTRACTABLE_EXTS, file_extension
 from .files import get_file_text_cached
 from .links import harvest_file_refs
+from .modules import fetch_modules_with_items
 
 MAX_PAGES_SCANNED = 50
 
@@ -47,11 +48,11 @@ async def index_course(
             if r.get("url"):
                 fallback.setdefault(fid, r["url"])
 
-    modules = await fetch_all_paginated_results(
-        f"/courses/{course_id}/modules", {"include[]": "items", "per_page": 100}
-    )
+    modules = await fetch_modules_with_items(course_id)
     if isinstance(modules, list):
         for m in modules:
+            if m.get("itemsError"):
+                notes.append(f"items unavailable for module {m.get('id')}: {m['itemsError']}")
             for item in m.get("items") or []:
                 if item.get("type") == "File" and item.get("content_id"):
                     file_ids[item["content_id"]] = item.get("title") or "?"

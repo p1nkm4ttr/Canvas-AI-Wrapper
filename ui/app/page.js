@@ -96,11 +96,19 @@ const Md = memo(function Md({ text }) {
         rehypePlugins={[rehypeKatex]}
         components={{
           a: (props) => <a {...props} target="_blank" rel="noreferrer" />,
-          img: (props) => (
+          img: (props) => {
+            // Only images served by this app are rendered. An <img> pointing
+            // anywhere else would make the BROWSER fetch a URL the model
+            // composed — a data channel no CLI-side network rule can close.
+            const src = String(props.src || "");
+            const local = src.startsWith("/api/spacefile?") || src.startsWith("data:image/");
+            if (!local) {
+              return <a href={src} target="_blank" rel="noreferrer noopener">[external image not shown: {src.length > 80 ? src.slice(0, 80) + "…" : src}]</a>;
+            }
             // Fit the bubble; click opens the full-size original in a new tab.
-            <img {...props} alt={props.alt || "figure"}
-                 onClick={() => window.open(props.src, "_blank")} />
-          ),
+            return <img {...props} alt={props.alt || "figure"}
+                        onClick={() => window.open(src, "_blank")} />;
+          },
         }}
       >
         {mathify(text)}

@@ -292,7 +292,8 @@ Adapters live in `ui/lib/backends/`; each turns its CLI's output into the same f
 - Spaces live outside the repository, so the coach's working directory has no `CLAUDE.md` above it and no project tree beside it.
 - Claude Code runs with its file tools confined by permission rules to the space folder plus the shared figure store, with explicit denies on the files it reads as instructions or settings (`CLAUDE.md`, `.claude/`, `.mcp.json`). Uploads refuse those names too. It is never allowed a shell. Codex works only through its sandboxed shell, which cannot write outside the space and has no network.
 - Canvas-authored text (bodies, titles, file names, notes) is fenced as untrusted before the model sees it, and a CI test insists every read tool declares how.
-- Web fetches from the model refuse non-public addresses on every redirect hop and stop downloading at the size cap.
+- Every outbound download (course files, verifier links harvested from assignment text, web images) goes through one guarded downloader: public hosts only apart from the Canvas host itself, every redirect hop re-checked, bodies streamed and abandoned at the size cap. A harvested link counts as a file reference only if it is on the Canvas origin.
+- The chat renders images only from the app's own file route. An image the model points at any other host is shown as a link and never fetched, so the browser cannot be turned into a data channel.
 - Date arithmetic and grade math happen in the tools, never in the model.
 
 ## Honest limitations

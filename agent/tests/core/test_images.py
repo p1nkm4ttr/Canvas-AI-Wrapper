@@ -198,8 +198,8 @@ def _client_for(hops):
 
 async def test_fetch_web_image_saves_png(fake_root):
     client, _ = _client_for([_Resp("image/png", _png())])
-    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
-         patch("canvas_mcp.tools.images._public_host_error", return_value=None):
+    with patch("canvas_mcp.core.netguard.httpx.AsyncClient", client), \
+         patch("canvas_mcp.core.netguard.public_host_error", return_value=None):
         result = await get_tool("fetch_web_image")("https://example.com/fig.png")
     assert result["embed"].startswith("/api/spacefile?p=.figures/web/")
     assert result["sourceUrl"] == "https://example.com/fig.png"
@@ -207,16 +207,16 @@ async def test_fetch_web_image_saves_png(fake_root):
 
 async def test_fetch_web_image_rejects_non_image(fake_root):
     client, _ = _client_for([_Resp("text/html", b"<html>")])
-    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
-         patch("canvas_mcp.tools.images._public_host_error", return_value=None):
+    with patch("canvas_mcp.core.netguard.httpx.AsyncClient", client), \
+         patch("canvas_mcp.core.netguard.public_host_error", return_value=None):
         assert "error" in await get_tool("fetch_web_image")("https://example.com/page")
 
 
 async def test_fetch_web_image_refuses_private_hosts_without_connecting(fake_root):
     client, requested = _client_for([_Resp("image/png", _png())])
     private = [(None, None, None, None, ("127.0.0.1", 0))]
-    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
-         patch("canvas_mcp.tools.images.socket.getaddrinfo", return_value=private):
+    with patch("canvas_mcp.core.netguard.httpx.AsyncClient", client), \
+         patch("canvas_mcp.core.netguard.socket.getaddrinfo", return_value=private):
         result = await get_tool("fetch_web_image")("http://internal.example/admin/reset")
     assert "non-public" in result["error"]
     assert requested == []  # refused before any request was made
@@ -226,11 +226,11 @@ async def test_fetch_web_image_revalidates_every_redirect_hop(fake_root):
     """A public host that 302s to localhost is the classic SSRF bypass."""
     client, requested = _client_for([_Resp("", redirect_to="http://127.0.0.1:8000/admin/reset")])
 
-    def host_check(host):
+    def host_check(host, allow_hosts=()):
         return None if host == "public.example" else "resolves to a non-public address"
 
-    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
-         patch("canvas_mcp.tools.images._public_host_error", side_effect=host_check):
+    with patch("canvas_mcp.core.netguard.httpx.AsyncClient", client), \
+         patch("canvas_mcp.core.netguard.public_host_error", side_effect=host_check):
         result = await get_tool("fetch_web_image")("http://public.example/image.png")
     assert "non-public" in result["error"]
     assert requested == ["http://public.example/image.png"]  # the loopback hop never happened
@@ -240,10 +240,10 @@ async def test_fetch_web_image_size_cap_stops_the_download(fake_root, monkeypatc
     monkeypatch.setattr("canvas_mcp.tools.images.MAX_WEB_IMAGE_BYTES", 10_000)
     resp = _Resp("image/png", b"x" * 400_000)
     client, _ = _client_for([resp])
-    with patch("canvas_mcp.tools.images.httpx.AsyncClient", client), \
-         patch("canvas_mcp.tools.images._public_host_error", return_value=None):
+    with patch("canvas_mcp.core.netguard.httpx.AsyncClient", client), \
+         patch("canvas_mcp.core.netguard.public_host_error", return_value=None):
         result = await get_tool("fetch_web_image")("https://example.com/huge.png")
-    assert "too large" in result["error"]
+    assert "cap" in result["error"]
     assert resp.chunks_served <= 4  # aborted early, not after buffering 400 KB
 
 
