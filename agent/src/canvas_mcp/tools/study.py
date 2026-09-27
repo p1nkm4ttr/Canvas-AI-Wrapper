@@ -396,6 +396,29 @@ def register_study_tools(mcp: FastMCP) -> None:
                         "url": absolute_url(a.get("html_url")),
                     })
 
+        # Attachments are files too, and usually the point of the announcement.
+        for att in ann.get("attachments") or []:
+            fid = att.get("id")
+            key = f"files:{fid}"
+            if not fid or key in seen or len(linked) >= MAX_LINKED_RESOURCES:
+                continue
+            seen.add(key)
+            fr = await get_file_text_cached(
+                int(fid), int(course_id),
+                origin=f"attached to announcement '{ann.get('title') or announcement_id}'",
+                fallback_url=att.get("url"),
+            )
+            if not _is_err(fr):
+                text, clipped = _clip(fr["text"], DEFAULT_CHARS_PER_FILE)
+                linked.append({
+                    "kind": "attachment",
+                    "fileId": fr["fileId"],
+                    "name": fence_untrusted_inline(fr["name"], "file name"),
+                    "status": fr["status"],
+                    "text": fence_untrusted(text, "file content") if text else "",
+                    "note": fr["note"] + (" (truncated)" if clipped else ""),
+                })
+
         return {
             "course": course_name,
             "title": fence_untrusted_inline(ann.get("title") or "Untitled", "announcement title"),
@@ -436,6 +459,7 @@ def register_study_tools(mcp: FastMCP) -> None:
             "course": course_name,
             "filesConsidered": result["total"],
             "thisRun": result["counts"],
+            "harvestedFromLinks": result.get("harvested", 0),
             "indexTotals": coverage,
             "note": (
                 "Extracted text is cached and searchable via "

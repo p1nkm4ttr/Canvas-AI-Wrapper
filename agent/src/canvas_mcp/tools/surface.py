@@ -18,6 +18,7 @@ from mcp.types import ToolAnnotations
 from ..agenda import collect_agenda, local_tz, status_from_submission
 from ..core.cache import resolve_course
 from ..core.client import absolute_url, fetch_all_paginated_results, make_canvas_request
+from ..core.links import harvest_external_links, harvest_file_refs
 from ..core.modules import fetch_modules_with_items, items_coverage_note
 from ..core.syllabus import parse_weights, resolve_syllabus
 from ..core.text import strip_html_tags
@@ -183,7 +184,8 @@ def register_surface_tools(mcp: FastMCP) -> None:
             return a
 
         due_local, days_until = _to_local(a.get("due_at"))
-        return {
+        desc_html = a.get("description") or ""
+        result: dict[str, Any] = {
             "course": course_name,
             "name": fence_untrusted_inline(a.get("name") or "Unnamed", "assignment name"),
             "due": due_local,
@@ -192,11 +194,38 @@ def register_surface_tools(mcp: FastMCP) -> None:
             "submissionTypes": a.get("submission_types") or [],
             "status": status_from_submission(a.get("submission")),
             "description": fence_untrusted(
-                strip_html_tags(a.get("description") or "") or "(no description)",
+                strip_html_tags(desc_html) or "(no description)",
                 "assignment description",
             ),
             "url": absolute_url(a.get("html_url")),
         }
+        # The brief/rubric/data files usually live ONLY here: Canvas hides
+        # files attached to assignment text from the files listing.
+        linked = [
+            {
+                "fileId": r["fileId"],
+                "title": fence_untrusted_inline(r["title"] or f"file {r['fileId']}", "link text"),
+                "url": r["url"] if r["url"].startswith("http")
+                       else absolute_url(r["url"] or f"/courses/{course_id}/files/{r['fileId']}"),
+            }
+            for r in harvest_file_refs(desc_html)
+        ]
+        if linked:
+            result["linkedFiles"] = linked
+            result["linkedFilesNote"] = (
+                "Canvas files referenced by the description (often not in any module). "
+                "Read one with get_file_text(fileId)."
+            )
+        external = [
+            {"title": fence_untrusted_inline(link["title"], "link text"), "url": link["url"]}
+            for link in harvest_external_links(desc_html, _origin())
+        ]
+        if external:
+            result["externalLinks"] = external
+            result["externalLinksNote"] = (
+                "Outside Canvas; not readable by these tools. Give the student the link."
+            )
+        return result
 
     # ----------------------------------------------------------- announcements
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -250,7 +279,7 @@ def register_surface_tools(mcp: FastMCP) -> None:
         shaped = []
         for ann in collected:
             posted_local, _ = _to_local(ann.get("posted_at"))
-            shaped.append({
+            entry: dict[str, Any] = {
                 "course": names.get(ann.get("context_code"), "?"),
                 "title": fence_untrusted_inline(ann.get("title") or "Untitled", "announcement title"),
                 "postedAt": posted_local,
@@ -258,7 +287,20 @@ def register_surface_tools(mcp: FastMCP) -> None:
                     strip_html_tags(ann.get("message") or ""), "announcement body"
                 ),
                 "url": absolute_url(ann.get("html_url")),
-            })
+            }
+            attachments = [
+                {"fileId": att["id"],
+                 "name": fence_untrusted_inline(att.get("display_name") or "?", "file name")}
+                for att in (ann.get("attachments") or []) if att.get("id")
+            ]
+            if attachments:
+                entry["attachments"] = attachments
+            linked_ids = [r["fileId"] for r in harvest_file_refs(ann.get("message"))]
+            if linked_ids:
+                entry["linkedFileIds"] = linked_ids
+            if attachments or linked_ids:
+                entry["filesNote"] = "get_announcement_context reads these; get_file_text(fileId) reads one."
+            shaped.append(entry)
         items, note = _cap(shaped, "announcements")
         result = {
             "announcements": items,

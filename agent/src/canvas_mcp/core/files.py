@@ -9,7 +9,7 @@ SQLite permanently.
 import httpx
 
 from .client import make_canvas_request
-from .db import get_file_text_row, put_file_text
+from .db import get_file_text_row, put_file_text, set_file_origin
 from .extract import MAX_DOWNLOAD_BYTES, extract_text, is_extractable
 from .logging import log_debug, log_error
 from .untrusted_content import fence_untrusted_inline
@@ -56,13 +56,83 @@ async def fetch_file_bytes(
     return name, data
 
 
-async def get_file_text_cached(file_id: int | str, course_id: int | None = None) -> dict:
+def _sniff_name(file_id: int, data: bytes, title: str = "") -> str:
+    """A usable filename for bytes fetched through a link, where no metadata
+    told us the type. Magic bytes decide the extension; the link text (if
+    any) is the stem."""
+    stem = (title or f"file-{file_id}").strip().replace("/", "-").replace("\\", "-")[:80]
+    if data.startswith(b"%PDF"):
+        ext = ".pdf"
+    elif data.startswith(b"PK"):
+        head = data[:200_000]
+        ext = ".pptx" if b"ppt/" in head else ".docx" if b"word/" in head else ".zip"
+    elif data.lstrip()[:1] in (b"<",):
+        ext = ".html"
+    else:
+        ext = ".txt" if _looks_like_text(data[:4096]) else ".bin"
+    return stem if stem.lower().endswith(ext) else stem + ext
+
+
+def _looks_like_text(sample: bytes) -> bool:
+    try:
+        sample.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return b"\x00" not in sample
+
+
+async def _from_fallback_url(
+    file_id: int | str, course_id: int | None, url: str, origin: str
+) -> dict:
+    """Fetch through the link's own URL when the metadata routes are refused
+    (files owned by the instructor's personal area still open via the
+    verifier in the link). Cached under the fixed key 'link', since no
+    updated_at is available to invalidate on."""
+    fid = int(file_id)
+    cached = get_file_text_row(fid, "link")
+    if cached is not None:
+        return {"fileId": fid, "name": cached["name"], "status": cached["status"],
+                "text": cached["text"], "note": cached["note"], "cached": True,
+                "url": f"/files/{fid}", "origin": cached.get("origin", "")}
+    data = await _download(url)
+    if data is None:
+        return {"error": f"Could not read file {fid}: metadata refused and the link did not download."}
+    name = _sniff_name(fid, data)
+    note_prefix = "Fetched through its link (metadata not accessible). "
+    if not is_extractable(name):
+        note = note_prefix + f"{fence_untrusted_inline(name, 'file name')} is not an extractable format."
+        put_file_text(fid, course_id, name, "link", "unsupported", "", note, origin=origin)
+        return {"fileId": fid, "name": name, "status": "unsupported", "text": "", "note": note,
+                "cached": False, "url": f"/files/{fid}", "origin": origin}
+    if len(data) > MAX_DOWNLOAD_BYTES:
+        note = note_prefix + f"File is {len(data) / 1e6:.0f} MB — beyond the extraction cap."
+        put_file_text(fid, course_id, name, "link", "unsupported", "", note, origin=origin)
+        return {"fileId": fid, "name": name, "status": "unsupported", "text": "", "note": note,
+                "cached": False, "url": f"/files/{fid}", "origin": origin}
+    extraction = extract_text(data, name)
+    note = (note_prefix + extraction.note).strip()
+    put_file_text(fid, course_id, name, "link", extraction.status, extraction.text, note, origin=origin)
+    return {"fileId": fid, "name": name, "status": extraction.status, "text": extraction.text,
+            "note": note, "cached": False, "url": f"/files/{fid}", "origin": origin}
+
+
+async def get_file_text_cached(
+    file_id: int | str,
+    course_id: int | None = None,
+    *,
+    origin: str = "",
+    fallback_url: str | None = None,
+) -> dict:
     """Extracted text for one Canvas file, from cache when fresh.
 
     Returns {fileId, name, status, text, note, url}; status is
     ok | scanned | unsupported | error, and note says what happened for
     anything other than ok. An {"error": ...} dict means the file itself
     could not even be described.
+
+    `origin` records where the file was found ("linked from assignment X")
+    for search results; `fallback_url` is a link with its own verifier, used
+    when both metadata routes refuse the id.
     """
     meta = await make_canvas_request("get", f"/files/{file_id}")
     if isinstance(meta, dict) and "error" in meta and course_id is not None:
@@ -70,6 +140,8 @@ async def get_file_text_cached(file_id: int | str, course_id: int | None = None)
         # course-scoped route still works (measured live in step 0).
         meta = await make_canvas_request("get", f"/courses/{course_id}/files/{file_id}")
     if isinstance(meta, dict) and "error" in meta:
+        if fallback_url:
+            return await _from_fallback_url(file_id, course_id, fallback_url, origin)
         return {"error": f"Could not read file {file_id}: {meta['error']}"}
 
     name = meta.get("display_name") or meta.get("filename") or f"file {file_id}"
@@ -99,6 +171,8 @@ async def get_file_text_cached(file_id: int | str, course_id: int | None = None)
     cached = get_file_text_row(fid, updated_at)
     if cached is not None:
         log_debug(f"file text cache hit for {fid}")
+        if origin and not cached.get("origin"):
+            set_file_origin(fid, origin)
         return _result(cached["status"], cached["text"], cached["note"], cached=True)
 
     if not is_extractable(name, real_filename, content_type):
@@ -107,12 +181,12 @@ async def get_file_text_cached(file_id: int | str, course_id: int | None = None)
             f"({content_type or 'unknown type'}) is not an extractable "
             "format (slides, docs, and text files are)."
         )
-        put_file_text(fid, resolved_course, name, updated_at, "unsupported", "", note)
+        put_file_text(fid, resolved_course, name, updated_at, "unsupported", "", note, origin=origin)
         return _result("unsupported", "", note)
 
     if size > MAX_DOWNLOAD_BYTES:
         note = f"File is {size / 1e6:.0f} MB — beyond the {MAX_DOWNLOAD_BYTES / 1e6:.0f} MB extraction cap."
-        put_file_text(fid, resolved_course, name, updated_at, "unsupported", "", note)
+        put_file_text(fid, resolved_course, name, updated_at, "unsupported", "", note, origin=origin)
         return _result("unsupported", "", note)
 
     if not file_url:
@@ -126,6 +200,6 @@ async def get_file_text_cached(file_id: int | str, course_id: int | None = None)
     extraction = extract_text(data, name, real_filename, content_type)
     put_file_text(
         fid, resolved_course, name, updated_at,
-        extraction.status, extraction.text, extraction.note,
+        extraction.status, extraction.text, extraction.note, origin=origin,
     )
     return _result(extraction.status, extraction.text, extraction.note)

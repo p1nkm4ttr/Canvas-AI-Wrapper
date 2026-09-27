@@ -93,6 +93,11 @@ def get_conn() -> sqlite3.Connection:
     if _conn is None:
         _conn = sqlite3.connect(db_path())
         _conn.executescript(_SCHEMA)
+        # Migration: where a file came from (linked from an assignment,
+        # attached to an announcement...). Older caches lack the column.
+        cols = {r[1] for r in _conn.execute("PRAGMA table_info(file_text)")}
+        if "origin" not in cols:
+            _conn.execute("ALTER TABLE file_text ADD COLUMN origin TEXT NOT NULL DEFAULT ''")
         _conn.commit()
     return _conn
 
@@ -167,20 +172,32 @@ def get_file_text_row(file_id: int, updated_at: str) -> dict[str, Any] | None:
     replaces the file, the timestamp changes and the stale text is ignored.
     """
     row = get_conn().execute(
-        "SELECT course_id, display_name, status, note, text FROM file_text "
+        "SELECT course_id, display_name, status, note, text, origin FROM file_text "
         "WHERE file_id = ? AND updated_at = ?",
         (file_id, updated_at),
     ).fetchone()
     if row is None:
         return None
-    course_id, display_name, status, note, text = row
+    course_id, display_name, status, note, text, origin = row
     return {
         "courseId": course_id,
         "name": display_name,
         "status": status,
         "note": note,
         "text": text,
+        "origin": origin or "",
     }
+
+
+def set_file_origin(file_id: int, origin: str) -> None:
+    """Record where a cached file was found, unless already known."""
+    if not origin:
+        return
+    get_conn().execute(
+        "UPDATE file_text SET origin = ? WHERE file_id = ? AND origin = ''",
+        (origin, file_id),
+    )
+    get_conn().commit()
 
 
 def put_file_text(
@@ -191,13 +208,14 @@ def put_file_text(
     status: str,
     text: str,
     note: str = "",
+    origin: str = "",
 ) -> None:
     conn = get_conn()
     conn.execute(
         "INSERT OR REPLACE INTO file_text "
-        "(file_id, course_id, display_name, updated_at, status, note, text, extracted_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (file_id, course_id, display_name, updated_at, status, note, text, time.time()),
+        "(file_id, course_id, display_name, updated_at, status, note, text, extracted_at, origin) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (file_id, course_id, display_name, updated_at, status, note, text, time.time(), origin),
     )
     conn.execute("DELETE FROM file_search WHERE file_id = ?", (file_id,))
     if status == "ok" and text:
@@ -218,16 +236,18 @@ def search_file_text(
     'local:<spaceId>/<name>' key in the file_id column (no schema change;
     the column is unindexed and typeless).
     """
+    # FTS5 tables cannot be aliased in a join; qualify with the full name.
     sql = (
-        "SELECT file_id, course_id, display_name, "
-        "snippet(file_search, 0, '>>', '<<', ' … ', 20) "
-        "FROM file_search WHERE file_search MATCH ? "
+        "SELECT file_search.file_id, file_search.course_id, file_search.display_name, "
+        "snippet(file_search, 0, '>>', '<<', ' … ', 20), file_text.origin "
+        "FROM file_search LEFT JOIN file_text ON file_text.file_id = file_search.file_id "
+        "WHERE file_search MATCH ? "
     )
     params: list[Any] = [query]
     if course_id is not None:
-        sql += "AND course_id = ? "
+        sql += "AND file_search.course_id = ? "
         params.append(course_id)
-    sql += "ORDER BY rank LIMIT ?"
+    sql += "ORDER BY file_search.rank LIMIT ?"
     params.append(limit)
     rows = get_conn().execute(sql, params).fetchall()
     results = []
@@ -237,6 +257,8 @@ def search_file_text(
             entry["localPath"] = r[0][len("local:"):]
         else:
             entry["fileId"] = r[0]
+        if r[4]:
+            entry["origin"] = r[4]
         results.append(entry)
     return results
 
